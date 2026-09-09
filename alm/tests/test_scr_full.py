@@ -1,8 +1,9 @@
 """Full Standard Formula SCR golden test: currency, concentration,
 counterparty default and operational risk sub-modules, plus the two-level
-correlation aggregation (market = corr(spread, currency, concentration);
-BSCR = corr(market, life, counterparty); SCR = BSCR + operational), each
-cross-checked against an independent calculation, on a 3-asset portfolio
+correlation aggregation (market = corr(spread, currency, concentration,
+interest_rate); BSCR = corr(market, life, counterparty); SCR = BSCR +
+operational), each cross-checked against an independent calculation, on a
+3-asset portfolio
 (A2 GBP corporate £600k, A3 USD corporate £150k, cash £50k, £800k total)
 built specifically to give every sub-module a genuine non-zero result.
 """
@@ -108,7 +109,10 @@ def test_full_scr_aggregation_matches_independent_two_level_correlation():
     # independent re-aggregation, coded directly against the same correlation
     # tables rather than reusing compute_full_standard_formula_scr's own call chain
     expected_market = aggregate_via_correlation(
-        {"spread": result.spread.scr_spread, "currency": result.currency.scr_currency, "concentration": result.concentration.scr_concentration},
+        {
+            "spread": result.spread.scr_spread, "currency": result.currency.scr_currency,
+            "concentration": result.concentration.scr_concentration, "interest_rate": result.interest_rate.scr_interest_rate,
+        },
         MARKET_CORRELATION,
     )
     assert result.market_scr == pytest.approx(expected_market, rel=1e-9)

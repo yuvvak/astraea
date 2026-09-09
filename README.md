@@ -1,4 +1,4 @@
-# UK MA ALM Engine: v1 (checkpoint 13: asymmetric licensing, PRA data loaders, real packaging)
+# UK MA ALM Engine: v1 (checkpoint 14: real PRA Rulebook SF calibration, real BoE market data)
 
 Single platform modelling MA-eligible UK annuity liabilities (fed from FIS
 Prophet) and the assets, MA, PRA matching tests, stresses, Risk Margin and
@@ -12,7 +12,7 @@ python -m venv .venv && .venv/Scripts/pip install pydantic pandas numpy scipy op
 .venv/Scripts/python -m pytest alm/tests/ -v
 ```
 
-135/135 tests pass, all against independent hand/closed-form cross-checks or
+138/138 tests pass, all against independent hand/closed-form cross-checks or
 explicitly-reasoned expected outcomes, not just internal consistency.
 
 Install as a real package (not just "run from checkout"):
@@ -60,14 +60,20 @@ this inside their own infrastructure on a license.
   operations.
 - **`alm/market_data/`**: RFR curve and FS table loaders from XLSX
   (`rfr_loader.py`, `fs_loader.py`), replacing the "always built directly
-  in code" gap from earlier checkpoints. No real PRA-published file has
-  been supplied, so both define a simple, documented long-format schema
-  (one row per currency/term, or per currency/rating/sector/term) rather
-  than guessing the PRA's actual wide, multi-tab layout, the same
-  documented-v1-default pattern as the Prophet adapter. Proven with more
-  than a round-trip: a curve and FS table loaded from an XLSX file (not
+  in code" gap from earlier checkpoints. Each defines its own simple,
+  documented long-format schema (one row per currency/term, or per
+  currency/rating/sector/term) for callers that don't want to deal with the
+  PRA's actual wide, multi-tab layout -- the same documented-v1-default
+  pattern as the Prophet adapter. Proven with more than a round-trip: a
+  curve and FS table loaded from an XLSX file in that documented format (not
   built in code) reproduce the golden Scenario B MA figure,
-  135.4463645158851bp, to nine decimal places.
+  135.4463645158851bp, to nine decimal places. **Now also proven against a
+  REAL published file**: `load_rfr_curve_from_pra_workbook` /
+  `load_fs_table_from_pra_workbook` parse the actual Bank of England
+  Solvency II technical information workbooks (checked into
+  `alm/market_data/pra_reference/`, see `SOURCE.md` there for the release
+  date/URL), locating each currency's column / each sector's FS-and-CoD
+  block by header text search rather than a hardcoded index.
 
 ## What's built
 
@@ -146,10 +152,13 @@ this inside their own infrastructure on a license.
     *shape* doesn't match the smooth annuity liability: exactly the
     mismatch Test 1 exists to catch, independent of PV adequacy.
   - **Test 2** (99.5th percentile 1Y VaR): interest-rate/inflation/currency
-    legs on Component A+B market value. Shock magnitudes are **illustrative
-    placeholders** (100bp/100bp/20%), explicitly flagged as not the PRA's
-    real calibration: swap `var_test.ShockSpec` when the real one is
-    available.
+    legs on Component A+B market value. The interest-rate and currency legs
+    now reuse the real PRA Rulebook Standard Formula calibration (3D5/3D6
+    maturity-banded rate shock, 3D32 25% FX shock), a defensible, explicit
+    choice since SS7/18 doesn't publish a separate Test-2-specific table.
+    The inflation leg's 100bp shock is still an **illustrative placeholder**:
+    no published PRA/EIOPA inflation shock table was found; swap
+    `var_test.ShockSpec.inflation_shock` when the real one is available.
   - **Test 4** (MA Loss Test, HP) and **Test 5** (Modified Accumulated
     Shortfall, HP), on a synthetic HP bond (10y expected, 8-13y permitted
     repayment bounds). Test 4 isolates the *asset's own* achievable yield
@@ -165,11 +174,18 @@ this inside their own infrastructure on a license.
   discounted on the basic RFR curve; a standard-annuity BEL-runoff
   approximation for SCR(t) when a full projected path isn't supplied.
 - **`alm/scr/`**: full Standard Formula SCR, notional/standalone for the MA
-  portfolio: spread, currency and concentration (market risk, aggregated
-  via a market correlation matrix into `market_scr`), longevity (life
-  risk), counterparty default (cash/deposit exposure only, no
-  reinsurance/derivative counterparties modeled yet), and operational
-  risk (flat factor of BEL). `market_scr` + `life` + `counterparty` are
+  portfolio: spread, currency, interest rate and concentration (market
+  risk, aggregated via a market correlation matrix into `market_scr`),
+  longevity (life risk), counterparty default (cash/deposit exposure only,
+  no reinsurance/derivative counterparties modeled yet), and operational
+  risk (flat factor of BEL). Spread (3D17, by credit quality step and the
+  position's own Macaulay duration), currency (3D32, 25%) and interest rate
+  (3D5/3D6, maturity-banded, not a parallel shift) now use the REAL PRA
+  Rulebook Standard Formula calibration -- see `alm/pra_calibration.py`,
+  verified against prarulebook.co.uk and cross-checked against independent
+  sources. Concentration threshold/risk factor, counterparty factors,
+  operational factor and every correlation parameter remain ILLUSTRATIVE
+  PLACEHOLDERS (no published PRA/EIOPA source found for these). `market_scr` + `life` + `counterparty` are
   aggregated into BSCR via a top-level correlation matrix
   (`scr/correlation.py`'s generic `aggregate_via_correlation`, which the
   old 2-variable spread/longevity formula is now a special case of, with
@@ -307,12 +323,14 @@ this inside their own infrastructure on a license.
   general `ReportingPack` and the narrower MALIR-specific pack), which
   cover the deliverable's "QRT-like" and "MALIR hooks" language, but are
   not a real regulator-submittable filing format.
-- `alm/market_data/` now has real RFR/FS loaders, but they read a
-  documented v1 schema this project defined itself, not a layout
-  confirmed against an actual PRA-published file (none has been
-  supplied). The real PRA workbook is very likely wide/multi-tab rather
-  than this loader's long format; treat the column names as a contract
-  to validate against the real file, not as already-proven correct.
+- `alm/market_data/` now has real RFR/FS loaders proven against both this
+  project's own documented v1 long-format schema AND a real published Bank
+  of England workbook (`load_rfr_curve_from_pra_workbook` /
+  `load_fs_table_from_pra_workbook`, see `alm/market_data/pra_reference/`).
+  The real-workbook adapters locate columns/headers by text search rather
+  than a hardcoded index, but were only checked against the single 31 Aug
+  2026 release -- treat that as reducing, not eliminating, the risk that a
+  future release reshapes the file in a way this loader doesn't expect.
 - `alm/config/` is still empty (named in the original brief, never
   filled in): valuation date, currency list, matching-bucket frequency
   and materiality thresholds are all still passed as explicit function
@@ -328,7 +346,11 @@ this inside their own infrastructure on a license.
    internal-model interface.
 3. **Hypothecation algorithm**: confirmed default: greedy nearest-maturity
    per-time-bucket waterfall (`ma/hypothecation.py`), swappable.
-4. **PRA Test 2 shock calibration**: the real EIOPA/PRA spread/rate/FX
-   shock tables have not been supplied; `SPREAD_STRESS_FACTORS` and
-   `var_test.ShockSpec` are illustrative placeholders, clearly flagged in
-   their docstrings.
+4. **PRA Test 2 shock calibration**: the interest-rate and FX legs now use
+   the real PRA Rulebook Standard Formula calibration (see
+   `alm/pra_calibration.py`); the inflation leg (`var_test.ShockSpec.inflation_shock`)
+   remains an illustrative placeholder -- no published PRA/EIOPA inflation
+   shock table was found. The SCR concentration/counterparty/operational
+   factors and every correlation parameter in `alm/scr/standard_formula.py`
+   are also still illustrative placeholders, clearly flagged in their
+   comments.

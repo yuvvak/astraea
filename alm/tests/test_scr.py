@@ -14,7 +14,6 @@ from alm.examples.golden_toy import build_corporate_bond_position, build_fs_tabl
 from alm.scr import (
     LONGEVITY_SHOCK_BEL_UPLIFT,
     MARKET_LIFE_CORRELATION,
-    SPREAD_STRESS_FACTORS,
     compute_longevity_scr,
     compute_map_standard_formula_scr,
     compute_spread_scr,
@@ -33,14 +32,29 @@ def _base():
     return cfs, curve, corp, fs_table
 
 
-def test_spread_scr_is_the_rating_factor_times_market_value_exactly():
+def _independent_macaulay_duration(position, curve):
+    """Reimplemented directly from the position's cash flows, NOT via
+    `alm.scr.macaulay_duration`, to keep this an independent cross-check."""
+    cfs = position.instrument.contractual_cashflows(curve.valuation_date)
+    weighted, total_pv = 0.0, 0.0
+    for cf in cfs.flows:
+        pv = cf.amount * curve.discount_factor(cf.time)
+        weighted += cf.time * pv
+        total_pv += pv
+    return weighted / total_pv
+
+
+def test_spread_scr_is_the_real_3d17_cqs2_stress_times_market_value():
     cfs, curve, corp, fs_table = _base()
     result = compute_spread_scr([corp], curve)
 
-    factor = SPREAD_STRESS_FACTORS[RatingNotch.A2]
-    assert factor == pytest.approx(0.05)
-    assert result.scr_spread == pytest.approx(factor * CORP_MV, rel=1e-9)
-    assert result.contributions_by_position["pos_corp"] == pytest.approx(37_500.0)
+    # CORP_A2_4_75pct_10y is a 10y A2 (CQS2) bond -- duration falls in the
+    # 5-10y band: stress = 7.0% + 0.7% * (dur - 5) (PRA Rulebook 3D17).
+    duration = _independent_macaulay_duration(corp, curve)
+    assert 5.0 < duration < 10.0
+    expected_factor = 0.070 + 0.007 * (duration - 5.0)
+    assert result.scr_spread == pytest.approx(expected_factor * CORP_MV, rel=1e-9)
+    assert result.contributions_by_position["pos_corp"] == pytest.approx(expected_factor * CORP_MV, rel=1e-9)
 
 
 def test_longevity_scr_holds_ma_rate_fixed_and_only_shocks_bel():

@@ -1,3 +1,5 @@
+from alm.pra_calibration import FALL_TABLE, RATING_TO_CQS, RISE_TABLE, SPREAD_STRESS_TABLE, UNASSESSED_SPREAD_STRESS_TABLE, macaulay_duration, shock_curve_down, shock_curve_up, spread_stress_pct
+
 from .correlation import aggregate_via_correlation
 from .internal_model import InternalModelSCRResult, run_internal_model_scr, run_internal_model_scr_from_file
 from .look_through import expand_look_through
@@ -12,12 +14,12 @@ from .standard_formula import (
     MARKET_CORRELATION,
     MARKET_LIFE_CORRELATION,
     OPERATIONAL_FACTOR_OF_BEL,
-    SPREAD_STRESS_FACTORS,
     TOP_LEVEL_CORRELATION,
     ConcentrationScrResult,
     CounterpartyDefaultScrResult,
     CurrencyScrResult,
     FullStandardFormulaSCR,
+    InterestRateScrResult,
     LongevityScrResult,
     MAPStandardFormulaSCR,
     OperationalScrResult,
@@ -26,6 +28,7 @@ from .standard_formula import (
     compute_counterparty_default_scr,
     compute_currency_scr,
     compute_full_standard_formula_scr,
+    compute_interest_rate_scr,
     compute_longevity_scr,
     compute_map_standard_formula_scr,
     compute_operational_scr,
@@ -34,6 +37,10 @@ from .standard_formula import (
 
 __all__ = [
     "aggregate_via_correlation",
+    "FALL_TABLE",
+    "RISE_TABLE",
+    "shock_curve_down",
+    "shock_curve_up",
     "InternalModelSCRResult",
     "run_internal_model_scr",
     "run_internal_model_scr_from_file",
@@ -48,12 +55,15 @@ __all__ = [
     "MARKET_CORRELATION",
     "MARKET_LIFE_CORRELATION",
     "OPERATIONAL_FACTOR_OF_BEL",
-    "SPREAD_STRESS_FACTORS",
+    "RATING_TO_CQS",
+    "SPREAD_STRESS_TABLE",
     "TOP_LEVEL_CORRELATION",
+    "UNASSESSED_SPREAD_STRESS_TABLE",
     "ConcentrationScrResult",
     "CounterpartyDefaultScrResult",
     "CurrencyScrResult",
     "FullStandardFormulaSCR",
+    "InterestRateScrResult",
     "LongevityScrResult",
     "MAPStandardFormulaSCR",
     "OperationalScrResult",
@@ -62,8 +72,11 @@ __all__ = [
     "compute_counterparty_default_scr",
     "compute_currency_scr",
     "compute_full_standard_formula_scr",
+    "compute_interest_rate_scr",
     "compute_longevity_scr",
     "compute_map_standard_formula_scr",
     "compute_operational_scr",
     "compute_spread_scr",
+    "macaulay_duration",
+    "spread_stress_pct",
 ]

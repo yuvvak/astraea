@@ -37,10 +37,13 @@ def test_test2_var_legs_and_independent_ir_repricing_cross_check():
 
     result = run_test2([gilt, corp], curve, bel, curve.valuation_date)
 
-    # independent re-pricing of the interest rate leg, not reusing run_test2's internals
+    # independent re-pricing of the interest rate leg (real PRA Rulebook 3D5/3D6
+    # maturity-banded shock), not reusing run_test2's own leg-combination logic
+    from alm.scr import shock_curve_down, shock_curve_up
+
     base_mv = gilt.resolved_market_value(curve) + corp.resolved_market_value(curve)
-    up_curve = curve.shift_parallel(0.01)
-    down_curve = curve.shift_parallel(-0.01)
+    up_curve = shock_curve_up(curve)
+    down_curve = shock_curve_down(curve)
     mv_up = gilt.resolved_market_value(up_curve) + corp.resolved_market_value(up_curve)
     mv_down = gilt.resolved_market_value(down_curve) + corp.resolved_market_value(down_curve)
     expected_var = max(0.0, base_mv - mv_up, base_mv - mv_down)

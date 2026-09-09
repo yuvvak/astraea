@@ -13,7 +13,22 @@ import pytest
 from alm.contracts.assets import AssetPosition, FundHolding
 from alm.contracts.fs import RatingNotch
 from alm.examples.golden_toy import build_corporate_bond_position, build_fs_table, build_usd_bond_position, build_rfr_curve
-from alm.scr import SPREAD_STRESS_FACTORS, compute_currency_scr, compute_spread_scr, expand_look_through
+from alm.scr import compute_currency_scr, compute_spread_scr, expand_look_through
+from alm.scr.standard_formula import spread_stress_pct
+
+
+def _independent_macaulay_duration(position, curve):
+    instrument = position.instrument
+    if isinstance(instrument, FundHolding):
+        total_mv = sum(cp.resolved_market_value(curve) for cp in instrument.constituent_positions)
+        return sum(_independent_macaulay_duration(cp, curve) * cp.resolved_market_value(curve) for cp in instrument.constituent_positions) / total_mv
+    cfs = instrument.contractual_cashflows(curve.valuation_date)
+    weighted, total_pv = 0.0, 0.0
+    for cf in cfs.flows:
+        pv = cf.amount * curve.discount_factor(cf.time)
+        weighted += cf.time * pv
+        total_pv += pv
+    return weighted / total_pv
 
 CORP_DIRECT_MV = 300_000.0
 CORP_IN_FUND_MV = 400_000.0
@@ -60,19 +75,23 @@ def test_spread_scr_reflects_actual_constituent_ratings_not_a_flat_unrated_facto
 
     opaque = compute_spread_scr([corp_direct, fund_pos], curve)
     fund_mv = fund_pos.resolved_market_value(curve)
-    # without look-through, the fund's own (default UNRATED) rating drives its whole charge
-    expected_opaque_fund_charge = SPREAD_STRESS_FACTORS[RatingNotch.UNRATED] * fund_mv
+    # without look-through, the fund's own (default UNRATED) rating drives its whole charge --
+    # 3D17.4's unassessed-bond formula, via the fund's own aggregate duration
+    fund_duration = _independent_macaulay_duration(fund_pos, curve)
+    expected_opaque_fund_charge = spread_stress_pct(RatingNotch.UNRATED, fund_duration) * fund_mv
     assert opaque.contributions_by_position["pos_fund"] == pytest.approx(expected_opaque_fund_charge, rel=1e-9)
 
     expanded = expand_look_through([corp_direct, fund_pos])
     look_through = compute_spread_scr(expanded, curve)
 
-    expected_corp_in_fund_charge = SPREAD_STRESS_FACTORS[RatingNotch.A2] * CORP_IN_FUND_MV
-    expected_usd_in_fund_charge = SPREAD_STRESS_FACTORS[RatingNotch.A3] * USD_IN_FUND_MV
+    corp_in_fund = next(p for p in expanded if p.id == "pos_fund::pos_corp")
+    usd_in_fund = next(p for p in expanded if p.id == "pos_fund::pos_usd_corp")
+    expected_corp_in_fund_charge = spread_stress_pct(RatingNotch.A2, _independent_macaulay_duration(corp_in_fund, curve)) * CORP_IN_FUND_MV
+    expected_usd_in_fund_charge = spread_stress_pct(RatingNotch.A3, _independent_macaulay_duration(usd_in_fund, curve)) * USD_IN_FUND_MV
     assert look_through.contributions_by_position["pos_fund::pos_corp"] == pytest.approx(expected_corp_in_fund_charge, rel=1e-9)
     assert look_through.contributions_by_position["pos_fund::pos_usd_corp"] == pytest.approx(expected_usd_in_fund_charge, rel=1e-9)
 
-    expected_direct_charge = SPREAD_STRESS_FACTORS[RatingNotch.A2] * CORP_DIRECT_MV
+    expected_direct_charge = spread_stress_pct(RatingNotch.A2, _independent_macaulay_duration(corp_direct, curve)) * CORP_DIRECT_MV
     total_expected = expected_direct_charge + expected_corp_in_fund_charge + expected_usd_in_fund_charge
     assert look_through.scr_spread == pytest.approx(total_expected, rel=1e-9)
 

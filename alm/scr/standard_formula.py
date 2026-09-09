@@ -32,11 +32,15 @@ in-the-money derivative (swap) exposure, and net (collateral-adjusted)
 reinsurance recoverable exposure -- an out-of-the-money swap, or a fully
 collateralized reinsurance position, correctly contributes nothing.
 
-Every numeric factor below (spread stress factors, FX shock, concentration
-threshold/risk factor, counterparty cash factor, operational factor,
-correlation parameters) is an ILLUSTRATIVE PLACEHOLDER, clearly not the
-real EIOPA/PRA Annex IV tables -- see each constant's own comment. Swap the
-tables; the aggregation mechanics do not change.
+Spread risk (3D17), currency risk (3D32) and interest rate risk (3D4-3D6)
+are now the REAL PRA Rulebook Standard Formula figures (verified against
+prarulebook.co.uk, cross-checked against independent sources -- see each
+constant's own comment for the rule citation). Concentration threshold/risk
+factor, counterparty cash/derivative/reinsurance factors, operational
+factor and every correlation parameter remain ILLUSTRATIVE PLACEHOLDERS,
+clearly not the real EIOPA/PRA Annex IV tables -- no published PRA/EIOPA
+source was found for these during this session. Swap the tables; the
+aggregation mechanics do not change.
 """
 
 from __future__ import annotations
@@ -51,21 +55,22 @@ from alm.contracts.curves import Curve
 from alm.contracts.fs import FSTable, RatingNotch
 from alm.ma.engine import MAResult, compute_ma
 from alm.ma.fs_rate import fs_rate_for_assets
+from alm.pra_calibration import (
+    CURRENCY_SHOCK,
+    RATING_TO_CQS,
+    SPREAD_STRESS_TABLE,
+    UNASSESSED_SPREAD_STRESS_TABLE,
+    macaulay_duration,
+    shock_curve_down,
+    shock_curve_up,
+    spread_stress_pct,
+)
+from alm.stresses.runner import reproject_swaps
 
 from .correlation import aggregate_via_correlation
 from .look_through import expand_look_through
 
-# Illustrative placeholder MV stress factors by rating -- see module docstring.
-SPREAD_STRESS_FACTORS: dict[RatingNotch, float] = {
-    RatingNotch.AAA: 0.00, RatingNotch.AA1: 0.02, RatingNotch.AA2: 0.02, RatingNotch.AA3: 0.02,
-    RatingNotch.A1: 0.05, RatingNotch.A2: 0.05, RatingNotch.A3: 0.05,
-    RatingNotch.BBB1: 0.12, RatingNotch.BBB2: 0.12, RatingNotch.BBB3: 0.12,
-    RatingNotch.BB1: 0.25, RatingNotch.BB2: 0.25, RatingNotch.BB3: 0.25,
-    RatingNotch.B_AND_BELOW: 0.35, RatingNotch.UNRATED: 0.25,
-}
-
 LONGEVITY_SHOCK_BEL_UPLIFT = 0.20      # SF longevity sub-module, approximated as a permanent BEL uplift
-CURRENCY_SHOCK = 0.20                  # illustrative FX shock, same magnitude as tests_pra/var_test's placeholder
 CONCENTRATION_THRESHOLD_PCT = 0.03     # illustrative single-name threshold (EIOPA CQS0-2 default is asset-class-graded)
 CONCENTRATION_RISK_FACTOR = 0.12       # illustrative flat risk factor applied to excess exposure over the threshold
 COUNTERPARTY_CASH_FACTOR = 0.15        # illustrative flat charge on cash/deposit counterparty exposure
@@ -102,6 +107,12 @@ MARKET_CORRELATION: dict[tuple[str, str], float] = {
     ("spread", "currency"): 0.25,
     ("spread", "concentration"): 0.00,
     ("currency", "concentration"): 0.25,
+    # interest_rate pairs: illustrative placeholder 0.25, same as the other pairs above --
+    # the real Annex IV matrix has separate CorrUp/CorrDown variants (interest-rate-vs-spread
+    # is 0 in the "up" scenario, 0.5 in the "down" scenario) not sourced this session.
+    ("interest_rate", "spread"): 0.25,
+    ("interest_rate", "currency"): 0.25,
+    ("interest_rate", "concentration"): 0.25,
 }
 TOP_LEVEL_CORRELATION: dict[tuple[str, str], float] = {
     ("market", "life"): 0.25,
@@ -115,6 +126,15 @@ class SpreadScrResult(BaseModel):
 
     scr_spread: float
     contributions_by_position: dict[str, float]
+
+
+class InterestRateScrResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    scr_interest_rate: float  # higher of the 3D5 (rise) / 3D6 (fall) own-funds loss, floored at 0
+    own_funds_base: float
+    own_funds_up: float
+    own_funds_down: float
 
 
 class LongevityScrResult(BaseModel):
@@ -187,6 +207,7 @@ class FullStandardFormulaSCR(BaseModel):
     spread: SpreadScrResult
     currency: CurrencyScrResult
     concentration: ConcentrationScrResult
+    interest_rate: InterestRateScrResult
     longevity: LongevityScrResult
     counterparty: CounterpartyDefaultScrResult
     operational: OperationalScrResult
@@ -199,8 +220,10 @@ class FullStandardFormulaSCR(BaseModel):
 def compute_spread_scr(
     positions: list[AssetPosition],
     curve: Curve,
-    factors: dict[RatingNotch, float] = SPREAD_STRESS_FACTORS,
 ) -> SpreadScrResult:
+    """3D17: stress_i (by CQS + modified duration, or the unassessed-bond
+    formula for UNRATED) times market value, summed across every non-
+    government position."""
     contributions: dict[str, float] = {}
     for p in positions:
         bond = p.instrument
@@ -208,9 +231,49 @@ def compute_spread_scr(
             contributions[p.id] = 0.0
             continue
         rating = getattr(bond, "rating", RatingNotch.UNRATED)
-        factor = factors.get(rating, factors[RatingNotch.UNRATED])
+        duration = macaulay_duration(p, curve)
+        factor = spread_stress_pct(rating, duration)
         contributions[p.id] = factor * p.resolved_market_value(curve)
     return SpreadScrResult(scr_spread=sum(contributions.values()), contributions_by_position=contributions)
+
+
+def compute_interest_rate_scr(
+    liability_cfs: CashFlowVector,
+    positions: list[AssetPosition],
+    curve: Curve,
+    fs_table: FSTable,
+    valuation_date: date,
+) -> InterestRateScrResult:
+    """3D4-3D6: the higher of the 3D5 (rise) / 3D6 (fall) own-funds loss.
+    A genuine market stress -- unlike `compute_longevity_scr`'s documented
+    fixed-MA-rate exception for pure life risk, this follows the module's
+    general "recalculate MA inside each SF scenario" convention (see module
+    docstring): assets are repriced and MA/BEL are fully re-derived on each
+    shocked curve. Swap positions are reprojected against the shocked curve
+    first via `stresses.runner.reproject_swaps`, so a floating leg's
+    expected cash flows reflect the shocked forward rates rather than the
+    base curve's frozen ones (the same gotcha `stresses.runner.run_stress`
+    already handles for market/ORSA scenarios)."""
+    base_mv = sum(p.resolved_market_value(curve) for p in positions)
+    base_fs_rate = fs_rate_for_assets(positions, fs_table, valuation_date, curve)
+    base_ma = compute_ma(liability_cfs, base_mv, base_fs_rate, curve)
+    own_funds_base = base_mv - base_ma.bel_with_ma
+
+    def _leg(shocked_curve: Curve) -> float:
+        shocked_positions = reproject_swaps(positions, shocked_curve)
+        mv = sum(p.resolved_market_value(shocked_curve) for p in shocked_positions)
+        fs_rate = fs_rate_for_assets(shocked_positions, fs_table, valuation_date, shocked_curve)
+        ma = compute_ma(liability_cfs, mv, fs_rate, shocked_curve)
+        return mv - ma.bel_with_ma
+
+    own_funds_up = _leg(shock_curve_up(curve))
+    own_funds_down = _leg(shock_curve_down(curve))
+    loss = max(0.0, own_funds_base - own_funds_up, own_funds_base - own_funds_down)
+
+    return InterestRateScrResult(
+        scr_interest_rate=loss, own_funds_base=own_funds_base,
+        own_funds_up=own_funds_up, own_funds_down=own_funds_down,
+    )
 
 
 def compute_currency_scr(
@@ -368,14 +431,14 @@ def compute_map_standard_formula_scr(
     curve: Curve,
     fs_table: FSTable,
     valuation_date: date,
-    spread_factors: dict[RatingNotch, float] = SPREAD_STRESS_FACTORS,
     longevity_shock: float = LONGEVITY_SHOCK_BEL_UPLIFT,
     correlation: float = MARKET_LIFE_CORRELATION,
 ) -> MAPStandardFormulaSCR:
     """Spread + longevity only. Preserved unchanged for backward
     compatibility; see `compute_full_standard_formula_scr` for the complete
-    sub-module set (currency, concentration, counterparty, operational)."""
-    spread = compute_spread_scr(positions, curve, spread_factors)
+    sub-module set (currency, concentration, interest rate, counterparty,
+    operational)."""
+    spread = compute_spread_scr(positions, curve)
     longevity = compute_longevity_scr(liability_cfs, positions, curve, fs_table, valuation_date, longevity_shock)
 
     scr_total = aggregate_via_correlation(
@@ -395,7 +458,6 @@ def compute_full_standard_formula_scr(
     fs_table: FSTable,
     valuation_date: date,
     base_currency: str = "GBP",
-    spread_factors: dict[RatingNotch, float] = SPREAD_STRESS_FACTORS,
     longevity_shock: float = LONGEVITY_SHOCK_BEL_UPLIFT,
     fx_shock: float = CURRENCY_SHOCK,
     concentration_threshold_pct: float = CONCENTRATION_THRESHOLD_PCT,
@@ -408,15 +470,19 @@ def compute_full_standard_formula_scr(
 ) -> FullStandardFormulaSCR:
     positions = expand_look_through(positions)
 
-    spread = compute_spread_scr(positions, curve, spread_factors)
+    spread = compute_spread_scr(positions, curve)
     currency = compute_currency_scr(positions, curve, base_currency, fx_shock)
     concentration = compute_concentration_scr(positions, curve, concentration_threshold_pct, concentration_risk_factor)
+    interest_rate = compute_interest_rate_scr(liability_cfs, positions, curve, fs_table, valuation_date)
     longevity = compute_longevity_scr(liability_cfs, positions, curve, fs_table, valuation_date, longevity_shock)
     counterparty = compute_counterparty_default_scr(positions, curve, counterparty_cash_factor)
     operational = compute_operational_scr(longevity.base_ma.bel_basic_rfr, operational_factor)
 
     market_scr = aggregate_via_correlation(
-        {"spread": spread.scr_spread, "currency": currency.scr_currency, "concentration": concentration.scr_concentration},
+        {
+            "spread": spread.scr_spread, "currency": currency.scr_currency,
+            "concentration": concentration.scr_concentration, "interest_rate": interest_rate.scr_interest_rate,
+        },
         market_correlation,
     )
     bscr = aggregate_via_correlation(
@@ -426,7 +492,7 @@ def compute_full_standard_formula_scr(
     scr_total = max(0.0, bscr + operational.scr_operational - lac_dt)
 
     return FullStandardFormulaSCR(
-        spread=spread, currency=currency, concentration=concentration, longevity=longevity,
-        counterparty=counterparty, operational=operational,
+        spread=spread, currency=currency, concentration=concentration, interest_rate=interest_rate,
+        longevity=longevity, counterparty=counterparty, operational=operational,
         market_scr=market_scr, bscr=bscr, lac_dt=lac_dt, scr_total=scr_total,
     )

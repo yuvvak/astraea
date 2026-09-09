@@ -11,10 +11,17 @@ percentile (the brief: "Align shock specifications with the firm's matching
 methodology; make shock files configurable (PRA/internal calibration)") --
 this mirrors how Standard Formula market risk sub-modules work (a named
 stress IS the 99.5th-percentile event, not a percentile of a simulated
-distribution). The magnitudes below (100bp parallel rate shock, 100bp
-inflation shock, 20% FX shock) are ILLUSTRATIVE PLACEHOLDERS, clearly not the
-PRA's actual calibration -- swap `ShockSpec` for the firm's real shock file
-once available; nothing else in this module needs to change.
+distribution).
+
+The interest-rate and currency legs now reuse the REAL PRA Rulebook Standard
+Formula calibration (3D5/3D6 maturity-banded rate shock, 3D32 25% FX shock --
+see `alm.pra_calibration`, also used by `alm.scr.standard_formula`), since
+SS7/18 doesn't publish a separate Test-2-specific table and reusing the
+already-regulator-published SF calibration is a defensible, explicit choice
+(documented here, not silently assumed). The inflation leg's 100bp shock
+remains an ILLUSTRATIVE PLACEHOLDER: no published PRA/EIOPA inflation shock
+table was found -- swap `ShockSpec.inflation_shock` for the firm's real
+calibration once available; nothing else in this module needs to change.
 """
 
 from __future__ import annotations
@@ -25,18 +32,20 @@ from pydantic import BaseModel, ConfigDict
 
 from alm.contracts.assets import AssetPosition
 from alm.contracts.curves import Curve
+from alm.pra_calibration import CURRENCY_SHOCK, shock_curve_down, shock_curve_up
 
 TEST2_THRESHOLD = 0.01  # SS7/18 Appendix 1 default: each risk's VaR <= 1% of BEL
 
 
 class ShockSpec(BaseModel):
-    """Illustrative v1 default shock calibration -- see module docstring."""
+    """Interest-rate and currency legs use the real PRA Rulebook SF
+    calibration by default; the inflation leg is still an illustrative
+    placeholder -- see module docstring."""
 
     model_config = ConfigDict(frozen=True)
 
-    interest_rate_shock: float = 0.01   # +/- 100bp parallel
-    inflation_shock: float = 0.01       # +/- 100bp on inflation-linked cash flow amounts
-    fx_shock: float = 0.20              # +/- 20% on non-base-currency market value
+    inflation_shock: float = 0.01       # ILLUSTRATIVE PLACEHOLDER: +/- 100bp on inflation-linked cash flow amounts
+    fx_shock: float = CURRENCY_SHOCK    # 3D32: real 25% FX shock
 
 
 DEFAULT_SHOCK_SPEC = ShockSpec()
@@ -92,9 +101,10 @@ def run_test2(
 ) -> Test2Result:
     base_mv = _total_market_value(positions, curve)
 
-    # -- interest rate leg: parallel shift of the whole curve, reprice every position
-    mv_up = _total_market_value(positions, curve.shift_parallel(shock.interest_rate_shock))
-    mv_down = _total_market_value(positions, curve.shift_parallel(-shock.interest_rate_shock))
+    # -- interest rate leg: real PRA Rulebook 3D5 (rise) / 3D6 (fall) maturity-banded
+    #    shock, NOT a parallel shift -- see module docstring
+    mv_up = _total_market_value(positions, shock_curve_up(curve))
+    mv_down = _total_market_value(positions, shock_curve_down(curve))
     ir_leg = _leg_result("interest_rate", base_mv, mv_up, mv_down, bel, threshold)
 
     # -- inflation leg: shock the amount of every cash flow flagged inflation-linked;
