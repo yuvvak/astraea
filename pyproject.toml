@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "alm"
+version = "0.1.0"
+description = "UK Solvency II Matching Adjustment ALM engine: MA calculation, hypothecation, PRA matching tests, stresses, Risk Margin, SCR, and an independent reconciliation layer for self-hosted validation of an existing MA/SCR process."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "TBC" }]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Office/Business :: Financial",
+]
+dependencies = [
+    "pydantic>=2,<3",
+    "pandas>=2",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "openpyxl>=3.1",
+    "cryptography>=42",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+alm-license = "alm.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["alm*"]
+exclude = ["alm.tests*"]
+
+[tool.pytest.ini_options]
+testpaths = ["alm/tests"]
