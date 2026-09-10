@@ -19,7 +19,7 @@ python -m venv .venv && .venv/Scripts/pip install pydantic pandas numpy scipy op
 .venv/Scripts/python -m pytest alm/tests/ -v
 ```
 
-146/146 tests pass, all against independent hand/closed-form cross-checks or
+152/152 tests pass, all against independent hand/closed-form cross-checks or
 explicitly-reasoned expected outcomes, not just internal consistency.
 
 Install as a real package (not just "run from checkout"):
@@ -241,7 +241,7 @@ this inside their own infrastructure on a license.
   the worst own-funds loss as SCR, not a percentile of a simulated
   distribution.
 - **`alm/reporting/`**: consolidates already-computed MA, hypothecation,
-  matching-test, stress, RM and SCR results into one structured
+  matching-test, stress, RM, SCR and Own Funds results into one structured
   `ReportingPack` (deliverable: "MA pack, matching-test pack"), a markdown
   narrative, and a timestamped JSON export. **`malir.py`**: the narrower
   annual MA attestation data pack the brief names explicitly ("FS
@@ -250,6 +250,19 @@ this inside their own infrastructure on a license.
   composed from results the caller already ran with the
   portfolio/scenario appropriate to each, rather than re-deriving a fixed
   pipeline internally.
+- **`alm/capital/`**: `compute_own_funds` turns the SCR this engine
+  already calculates into the headline solvency metric real insurers
+  publish -- an SCR coverage ratio (Rothesay Life Plc discloses 249% for
+  FY2025, see the Rothesay Benchmark artifact). Basic Own Funds = asset
+  market value minus Technical Provisions (BEL with MA + Risk Margin),
+  real Solvency II methodology, but deliberately stops there: it does not
+  attempt capital tiering (Tier 1/2/3, restricted vs unrestricted,
+  eligibility caps), because this engine has never modeled a firm's
+  actual capital structure (share capital, subordinated debt, RT1
+  notes) -- only the asset/liability side of an MA portfolio. Reports
+  Basic Own Funds, clearly labelled as such, not eligible Own Funds
+  (Rothesay's own FY2025 figures differ: £9,272m available vs £9,116m
+  eligible, Note F.1).
 - **`alm/config/`**: `FirmConfig`, the single place a firm's valuation
   date, base/reporting currencies, matching-bucket-frequency assumption,
   SCR mode and hypothecation algorithm choice, and reconciliation

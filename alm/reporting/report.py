@@ -23,6 +23,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
+from alm.capital.own_funds import OwnFundsResult
 from alm.ma.engine import MAResult
 from alm.ma.hypothecation import HypothecationResult
 from alm.rm.risk_margin import RiskMarginResult
@@ -60,6 +61,7 @@ class ReportingPack(BaseModel):
     risk_margin: RiskMarginResult | None = None
     scr_standard_formula: FullStandardFormulaSCR | None = None
     scr_internal_model: InternalModelSCRResult | None = None
+    own_funds: OwnFundsResult | None = None
 
 
 def build_reporting_pack(
@@ -72,6 +74,7 @@ def build_reporting_pack(
     risk_margin: RiskMarginResult | None = None,
     scr_standard_formula: FullStandardFormulaSCR | None = None,
     scr_internal_model: InternalModelSCRResult | None = None,
+    own_funds: OwnFundsResult | None = None,
 ) -> ReportingPack:
     return ReportingPack(
         generated_at=datetime.now(timezone.utc),
@@ -85,6 +88,7 @@ def build_reporting_pack(
         risk_margin=risk_margin,
         scr_standard_formula=scr_standard_formula,
         scr_internal_model=scr_internal_model,
+        own_funds=own_funds,
     )
 
 
@@ -181,6 +185,20 @@ def render_markdown(pack: ReportingPack) -> str:
             "",
             f"- SCR (worst scenario: {im.worst_scenario_name}): {im.scr:,.2f}",
             f"- Scenarios run: {im.n_scenarios}",
+            "",
+        ]
+
+    if pack.own_funds is not None:
+        of = pack.own_funds
+        coverage_str = f"{of.coverage_ratio:.0%}" if of.coverage_ratio is not None else "n/a (SCR = 0)"
+        lines += [
+            "## Own Funds and SCR Coverage",
+            "",
+            f"- Asset market value: {of.asset_market_value:,.2f}",
+            f"- Technical Provisions (BEL with MA + Risk Margin): {of.technical_provisions:,.2f}",
+            f"- Basic Own Funds: {of.basic_own_funds:,.2f}",
+            f"- SCR total: {of.scr_total:,.2f}",
+            f"- SCR coverage ratio: {coverage_str}",
             "",
         ]
 

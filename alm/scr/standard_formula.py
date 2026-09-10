@@ -45,6 +45,17 @@ piecewise variance-of-losses aggregation across counterparties) is
 substantially more involved than a table lookup, and was deliberately left
 unimplemented this session rather than risk a subtly wrong regulatory
 capital formula -- see `compute_counterparty_default_scr`'s docstring.
+A later research pass (2026-09-10) confirmed the Article 199 PD-by-CQS
+table (CQS0 0.002% up to CQS5/6 4.2%) and the Type 1 LGD formulas for
+reinsurance/derivative/mortgage exposures against primary legislative
+text, but could NOT confirm the Type 1 cross-counterparty variance
+aggregation formula or the Type 2 flat-factor article against primary
+text -- only against secondary sources reproducing it without citing the
+underlying article. That gap is exactly the "piecewise variance-of-losses
+aggregation" this docstring already flagged as the hard part; implementing
+against unconfirmed pieces would trade an honest placeholder for a formula
+that looks real but isn't fully verified, so this sub-module is still
+deliberately left as-is.
 """
 
 from __future__ import annotations
