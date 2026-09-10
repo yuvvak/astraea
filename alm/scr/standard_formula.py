@@ -1,11 +1,11 @@
 """Standard Formula SCR for the MA portfolio (deliverable 8: "SF SCR
 skeleton for the MA portfolio including spread + longevity + MA-in-stress").
 
-Sub-modules: spread, currency and concentration (market risk), longevity
-(life underwriting risk), counterparty default, and operational risk,
-aggregated as:
+Sub-modules: spread, currency, interest rate and concentration (market
+risk), longevity (life underwriting risk), counterparty default, and
+operational risk, aggregated as:
 
-    market  = corr({spread, currency, concentration})
+    market  = corr({spread, currency, interest_rate, concentration})
     BSCR    = corr({market, life, counterparty})
     SCR     = max(0, BSCR + operational - LAC_DT)
 
@@ -32,15 +32,19 @@ in-the-money derivative (swap) exposure, and net (collateral-adjusted)
 reinsurance recoverable exposure -- an out-of-the-money swap, or a fully
 collateralized reinsurance position, correctly contributes nothing.
 
-Spread risk (3D17), currency risk (3D32) and interest rate risk (3D4-3D6)
-are now the REAL PRA Rulebook Standard Formula figures (verified against
-prarulebook.co.uk, cross-checked against independent sources -- see each
-constant's own comment for the rule citation). Concentration threshold/risk
-factor, counterparty cash/derivative/reinsurance factors, operational
-factor and every correlation parameter remain ILLUSTRATIVE PLACEHOLDERS,
-clearly not the real EIOPA/PRA Annex IV tables -- no published PRA/EIOPA
-source was found for these during this session. Swap the tables; the
-aggregation mechanics do not change.
+Spread risk (3D17), currency risk (3D32), interest rate risk (3D4-3D6),
+concentration risk (3D26-3D31), operational risk (Article 204) and every
+correlation parameter used (market sub-module and top-level BSCR) are now
+the REAL PRA Rulebook / Solvency II Delegated Regulation Annex IV figures
+-- verified against prarulebook.co.uk and cross-checked against
+independent sources; see each constant's own comment (in this module or
+`alm/pra_calibration.py`) for the rule citation. Counterparty default
+remains an ILLUSTRATIVE PLACEHOLDER: the real Article 199 Type 1/Type 2
+formula (loss-given-default, probability of default by rating, and a
+piecewise variance-of-losses aggregation across counterparties) is
+substantially more involved than a table lookup, and was deliberately left
+unimplemented this session rather than risk a subtly wrong regulatory
+capital formula -- see `compute_counterparty_default_scr`'s docstring.
 """
 
 from __future__ import annotations
@@ -56,10 +60,16 @@ from alm.contracts.fs import FSTable, RatingNotch
 from alm.ma.engine import MAResult, compute_ma
 from alm.ma.fs_rate import fs_rate_for_assets
 from alm.pra_calibration import (
+    BSCR_CORRELATION,
     CURRENCY_SHOCK,
+    MARKET_RISK_CORRELATION_IR_FALL_BINDING,
+    MARKET_RISK_CORRELATION_IR_RISE_BINDING,
+    OPERATIONAL_BSCR_CAP_FRACTION,
+    OPERATIONAL_TP_FACTOR,
     RATING_TO_CQS,
     SPREAD_STRESS_TABLE,
     UNASSESSED_SPREAD_STRESS_TABLE,
+    concentration_threshold_and_factor,
     macaulay_duration,
     shock_curve_down,
     shock_curve_up,
@@ -71,10 +81,7 @@ from .correlation import aggregate_via_correlation
 from .look_through import expand_look_through
 
 LONGEVITY_SHOCK_BEL_UPLIFT = 0.20      # SF longevity sub-module, approximated as a permanent BEL uplift
-CONCENTRATION_THRESHOLD_PCT = 0.03     # illustrative single-name threshold (EIOPA CQS0-2 default is asset-class-graded)
-CONCENTRATION_RISK_FACTOR = 0.12       # illustrative flat risk factor applied to excess exposure over the threshold
 COUNTERPARTY_CASH_FACTOR = 0.15        # illustrative flat charge on cash/deposit counterparty exposure
-OPERATIONAL_FACTOR_OF_BEL = 0.0045     # illustrative proxy for the SF life operational risk TP-based component
 
 # Illustrative placeholder charge on in-the-money derivative (swap) counterparty exposure, by counterparty
 # rating -- a much lower scale than the cash factor above, reflecting that cleared/collateralized derivative
@@ -101,24 +108,14 @@ COUNTERPARTY_REINSURANCE_FACTORS: dict[RatingNotch, float] = {
     RatingNotch.B_AND_BELOW: 0.15, RatingNotch.UNRATED: 0.15,
 }
 
-MARKET_LIFE_CORRELATION = 0.25  # Solvency II Delta correlation parameter, market <-> life SCR (kept for backward compat)
+MARKET_LIFE_CORRELATION = 0.25  # Solvency II Annex IV correlation parameter, market <-> life SCR (kept for backward compat)
 
-MARKET_CORRELATION: dict[tuple[str, str], float] = {
-    ("spread", "currency"): 0.25,
-    ("spread", "concentration"): 0.00,
-    ("currency", "concentration"): 0.25,
-    # interest_rate pairs: illustrative placeholder 0.25, same as the other pairs above --
-    # the real Annex IV matrix has separate CorrUp/CorrDown variants (interest-rate-vs-spread
-    # is 0 in the "up" scenario, 0.5 in the "down" scenario) not sourced this session.
-    ("interest_rate", "spread"): 0.25,
-    ("interest_rate", "currency"): 0.25,
-    ("interest_rate", "concentration"): 0.25,
-}
-TOP_LEVEL_CORRELATION: dict[tuple[str, str], float] = {
-    ("market", "life"): 0.25,
-    ("market", "counterparty"): 0.25,
-    ("life", "counterparty"): 0.00,
-}
+# Real Annex IV market-risk correlation matrix (see `alm.pra_calibration` for the citation and
+# the IR-rise/IR-fall variants); `MARKET_CORRELATION` here defaults to the rise-binding variant
+# for any caller that doesn't need the conditional behaviour `compute_full_standard_formula_scr`
+# applies automatically.
+MARKET_CORRELATION: dict[tuple[str, str], float] = MARKET_RISK_CORRELATION_IR_RISE_BINDING
+TOP_LEVEL_CORRELATION: dict[tuple[str, str], float] = BSCR_CORRELATION
 
 
 class SpreadScrResult(BaseModel):
@@ -135,6 +132,7 @@ class InterestRateScrResult(BaseModel):
     own_funds_base: float
     own_funds_up: float
     own_funds_down: float
+    binding_direction: str  # "rise" or "fall" -- whichever shock produced the larger loss; drives the Annex IV IR-vs-spread correlation choice
 
 
 class LongevityScrResult(BaseModel):
@@ -161,7 +159,7 @@ class ConcentrationScrResult(BaseModel):
 
     scr_concentration: float
     total_assets: float
-    threshold_pct: float
+    threshold_pct: dict[str, float]  # by position id -- now CQS-banded (3D29), not a single flat rate
     charge_by_position: dict[str, float]
     excess_share_by_position: dict[str, float]
 
@@ -184,8 +182,10 @@ class OperationalScrResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     scr_operational: float
-    bel: float
-    factor: float
+    op_provisions: float  # 0.45% x life TP net of reinsurance excl. risk margin
+    bscr: float
+    bscr_cap: float  # 30% x BSCR
+    capped: bool  # True if op_provisions exceeded the 30%xBSCR cap
 
 
 class MAPStandardFormulaSCR(BaseModel):
@@ -268,11 +268,15 @@ def compute_interest_rate_scr(
 
     own_funds_up = _leg(shock_curve_up(curve))
     own_funds_down = _leg(shock_curve_down(curve))
-    loss = max(0.0, own_funds_base - own_funds_up, own_funds_base - own_funds_down)
+    loss_up = own_funds_base - own_funds_up
+    loss_down = own_funds_base - own_funds_down
+    loss = max(0.0, loss_up, loss_down)
+    binding_direction = "rise" if loss_up >= loss_down else "fall"
 
     return InterestRateScrResult(
         scr_interest_rate=loss, own_funds_base=own_funds_base,
         own_funds_up=own_funds_up, own_funds_down=own_funds_down,
+        binding_direction=binding_direction,
     )
 
 
@@ -293,25 +297,35 @@ def compute_currency_scr(
     )
 
 
-def compute_concentration_scr(
-    positions: list[AssetPosition],
-    curve: Curve,
-    threshold_pct: float = CONCENTRATION_THRESHOLD_PCT,
-    risk_factor: float = CONCENTRATION_RISK_FACTOR,
-) -> ConcentrationScrResult:
-    """Simplified EIOPA-style single-name concentration charge, one 'name'
-    per position (v1 simplification: no issuer field yet to group
-    positions sharing an issuer -- see contracts/assets.py). For each
-    position, the exposure share above `threshold_pct` of total assets is
-    charged at `risk_factor` and the charges are aggregated by sum-of-
-    squares (undiversified single-name risk), not summed linearly.
+def compute_concentration_scr(positions: list[AssetPosition], curve: Curve) -> ConcentrationScrResult:
+    """3D26-3D31: single-name concentration charge, one 'name' per position
+    (v1 simplification: no issuer field yet to group positions sharing an
+    issuer -- see contracts/assets.py). Government positions are excluded
+    entirely (3D26.4: exposures with g_i = 0 are excluded from the single-
+    name exposure calculation), matching this codebase's existing gilt
+    convention. Every other position's own threshold (CT_i) and risk
+    factor (g_i) now come from the real CQS-banded 3D29/3D30 tables (was a
+    flat 3%/12% placeholder); XS_i = max(0, MV_i - CT_i * total assets),
+    Conc_i = g_i * XS_i, aggregated by sum-of-squares (undiversified
+    single-name risk) per 3D27.
     """
     mv_by_position = {p.id: p.resolved_market_value(curve) for p in positions}
     total_assets = sum(mv_by_position.values())
 
     charge_by_position: dict[str, float] = {}
     excess_share_by_position: dict[str, float] = {}
-    for pid, mv in mv_by_position.items():
+    threshold_by_position: dict[str, float] = {}
+    for p in positions:
+        pid = p.id
+        mv = mv_by_position[pid]
+        if getattr(p.instrument, "is_government", False):
+            excess_share_by_position[pid] = 0.0
+            charge_by_position[pid] = 0.0
+            threshold_by_position[pid] = 0.0
+            continue
+        rating = getattr(p.instrument, "rating", RatingNotch.UNRATED)
+        threshold_pct, risk_factor = concentration_threshold_and_factor(rating)
+        threshold_by_position[pid] = threshold_pct
         share = mv / total_assets if total_assets > 0 else 0.0
         excess_share = max(0.0, share - threshold_pct)
         excess_share_by_position[pid] = excess_share
@@ -320,7 +334,8 @@ def compute_concentration_scr(
     scr_concentration = sum(c ** 2 for c in charge_by_position.values()) ** 0.5
 
     return ConcentrationScrResult(
-        scr_concentration=scr_concentration, total_assets=total_assets, threshold_pct=threshold_pct,
+        scr_concentration=scr_concentration, total_assets=total_assets,
+        threshold_pct=threshold_by_position,
         charge_by_position=charge_by_position, excess_share_by_position=excess_share_by_position,
     )
 
@@ -377,8 +392,28 @@ def compute_counterparty_default_scr(
     )
 
 
-def compute_operational_scr(bel: float, factor: float = OPERATIONAL_FACTOR_OF_BEL) -> OperationalScrResult:
-    return OperationalScrResult(scr_operational=factor * bel, bel=bel, factor=factor)
+def compute_operational_scr(
+    bel_net_of_reinsurance: float,
+    bscr: float,
+    tp_factor: float = OPERATIONAL_TP_FACTOR,
+    bscr_cap_fraction: float = OPERATIONAL_BSCR_CAP_FRACTION,
+) -> OperationalScrResult:
+    """Article 204: SCR_op = min(0.30 x BSCR, Op) + 0.25 x Exp_ul. This
+    engine only models Op_provisions (`tp_factor` x life TP net of
+    reinsurance, excluding risk margin -- `bel_net_of_reinsurance` here is
+    the caller's own basic-RFR BEL, the closest available proxy since this
+    engine doesn't separately track a risk-margin-inclusive TP figure at
+    this call site); Op_premiums isn't modelled (see module docstring:
+    no material ongoing premium on a back-book annuity portfolio), and
+    Exp_ul is 0 (no unit-linked business)."""
+    op_provisions = tp_factor * bel_net_of_reinsurance
+    bscr_cap = bscr_cap_fraction * bscr
+    capped = op_provisions > bscr_cap
+    scr_operational = min(op_provisions, bscr_cap)
+    return OperationalScrResult(
+        scr_operational=scr_operational, op_provisions=op_provisions,
+        bscr=bscr, bscr_cap=bscr_cap, capped=capped,
+    )
 
 
 def compute_longevity_scr(
@@ -460,11 +495,7 @@ def compute_full_standard_formula_scr(
     base_currency: str = "GBP",
     longevity_shock: float = LONGEVITY_SHOCK_BEL_UPLIFT,
     fx_shock: float = CURRENCY_SHOCK,
-    concentration_threshold_pct: float = CONCENTRATION_THRESHOLD_PCT,
-    concentration_risk_factor: float = CONCENTRATION_RISK_FACTOR,
     counterparty_cash_factor: float = COUNTERPARTY_CASH_FACTOR,
-    operational_factor: float = OPERATIONAL_FACTOR_OF_BEL,
-    market_correlation: dict[tuple[str, str], float] = MARKET_CORRELATION,
     top_level_correlation: dict[tuple[str, str], float] = TOP_LEVEL_CORRELATION,
     lac_dt: float = 0.0,
 ) -> FullStandardFormulaSCR:
@@ -472,12 +503,17 @@ def compute_full_standard_formula_scr(
 
     spread = compute_spread_scr(positions, curve)
     currency = compute_currency_scr(positions, curve, base_currency, fx_shock)
-    concentration = compute_concentration_scr(positions, curve, concentration_threshold_pct, concentration_risk_factor)
+    concentration = compute_concentration_scr(positions, curve)
     interest_rate = compute_interest_rate_scr(liability_cfs, positions, curve, fs_table, valuation_date)
     longevity = compute_longevity_scr(liability_cfs, positions, curve, fs_table, valuation_date, longevity_shock)
     counterparty = compute_counterparty_default_scr(positions, curve, counterparty_cash_factor)
-    operational = compute_operational_scr(longevity.base_ma.bel_basic_rfr, operational_factor)
 
+    # Annex IV: the interest-rate-vs-spread correlation depends on which interest rate shock
+    # (rise/fall) was actually binding for THIS portfolio -- see InterestRateScrResult.binding_direction.
+    market_correlation = (
+        MARKET_RISK_CORRELATION_IR_RISE_BINDING if interest_rate.binding_direction == "rise"
+        else MARKET_RISK_CORRELATION_IR_FALL_BINDING
+    )
     market_scr = aggregate_via_correlation(
         {
             "spread": spread.scr_spread, "currency": currency.scr_currency,
@@ -489,6 +525,7 @@ def compute_full_standard_formula_scr(
         {"market": market_scr, "life": longevity.scr_longevity, "counterparty": counterparty.scr_counterparty},
         top_level_correlation,
     )
+    operational = compute_operational_scr(longevity.base_ma.bel_basic_rfr, bscr)
     scr_total = max(0.0, bscr + operational.scr_operational - lac_dt)
 
     return FullStandardFormulaSCR(

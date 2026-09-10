@@ -150,6 +150,71 @@ def spread_stress_pct(rating: RatingNotch, duration: float) -> float:
     return _piecewise_stress(SPREAD_STRESS_TABLE[RATING_TO_CQS[rating]], duration)
 
 
+# ------------------------------------------------- 3D26-3D31: market risk concentrations ---
+
+# 3D29: relative excess exposure threshold by CQS. 3D30: risk factor (g_i) by CQS. Both
+# verified against prarulebook.co.uk this session; independently cross-checked against the
+# EU Delegated Regulation Article 186/187 values (same figures, confirming the PRA's onshored
+# rule hasn't diverged from the original EU calibration for this sub-module).
+CONCENTRATION_THRESHOLD_BY_CQS: dict[int, float] = {0: 0.03, 1: 0.03, 2: 0.03, 3: 0.015, 4: 0.015, 5: 0.015, 6: 0.015}
+CONCENTRATION_RISK_FACTOR_BY_CQS: dict[int, float] = {0: 0.12, 1: 0.12, 2: 0.21, 3: 0.27, 4: 0.73, 5: 0.73, 6: 0.73}
+# Unrated exposures: the rule's exact branching (pre-disclosure ECAI / counterparty's own
+# solvency ratio) isn't modelled here; treated the same as the worst-quality banded exposure
+# (CQS3-6's threshold, CQS4-6's risk factor) as a documented, conservative v1 choice.
+UNRATED_CONCENTRATION_THRESHOLD = 0.015
+UNRATED_CONCENTRATION_RISK_FACTOR = 0.73
+
+
+def concentration_threshold_and_factor(rating: RatingNotch) -> tuple[float, float]:
+    if rating not in RATING_TO_CQS:
+        return UNRATED_CONCENTRATION_THRESHOLD, UNRATED_CONCENTRATION_RISK_FACTOR
+    cqs = RATING_TO_CQS[rating]
+    return CONCENTRATION_THRESHOLD_BY_CQS[cqs], CONCENTRATION_RISK_FACTOR_BY_CQS[cqs]
+
+
+# --------------------------------------------------- Annex IV: correlation matrices (real) ---
+
+# Market risk sub-module correlation matrix, restricted to the four sub-modules this engine
+# actually models (interest rate, spread, currency, concentration -- no equity/property).
+# Verified against an independent EY technical deck (11 Jun 2015) cross-checking the EIOPA
+# Delegated Regulation Annex IV table; the interest-rate rise/fall percentages on the same
+# deck matched the in-force PRA Rulebook 3D5/3D6 table fetched separately, giving confidence
+# the rest of the deck's figures are still current. "A" (interest-rate vs spread correlation)
+# is 0 when the RISE shock was the binding (larger-loss) interest rate scenario, 0.5 when the
+# FALL shock was binding -- see `compute_interest_rate_scr`'s `binding_direction`.
+MARKET_RISK_CORRELATION_IR_RISE_BINDING: dict[tuple[str, str], float] = {
+    ("interest_rate", "spread"): 0.0,
+    ("interest_rate", "currency"): 0.25,
+    ("interest_rate", "concentration"): 0.0,
+    ("spread", "currency"): 0.25,
+    ("spread", "concentration"): 0.0,
+    ("currency", "concentration"): 0.0,
+}
+MARKET_RISK_CORRELATION_IR_FALL_BINDING: dict[tuple[str, str], float] = {
+    **{k: v for k, v in MARKET_RISK_CORRELATION_IR_RISE_BINDING.items() if k != ("interest_rate", "spread")},
+    ("interest_rate", "spread"): 0.5,
+}
+
+# Top-level BSCR correlation matrix, restricted to the three modules this engine models
+# (market, life, counterparty default -- no health/non-life). Same Annex IV table; note
+# default(counterparty)-life is 0.25, NOT the 0.00 this codebase used before this pass.
+BSCR_CORRELATION: dict[tuple[str, str], float] = {
+    ("market", "life"): 0.25,
+    ("market", "counterparty"): 0.25,
+    ("life", "counterparty"): 0.25,
+}
+
+# ------------------------------------------------------------- operational risk (Article 204) ---
+
+# SCR_op = min(0.30 * BSCR, Op) + 0.25 * Exp_ul, Op = max(Op_premiums, Op_provisions).
+# This engine only models Op_provisions (0.45% of life technical provisions net of
+# reinsurance, excluding the risk margin) -- Op_premiums (premium-based) isn't modelled since
+# a back-book bulk annuity portfolio has no material ongoing premium income, and Exp_ul
+# (unit-linked expenses) is 0 since this engine has no unit-linked business.
+OPERATIONAL_TP_FACTOR = 0.0045
+OPERATIONAL_BSCR_CAP_FRACTION = 0.30
+
+
 def macaulay_duration(position: AssetPosition, curve: Curve) -> float:
     """PV-weighted-average-time duration of the position's own contractual
     cash flows on `curve`. The Delegated Regulation/PRA Rulebook doesn't

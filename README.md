@@ -1,4 +1,4 @@
-# UK MA ALM Engine: v1 (checkpoint 14: real PRA Rulebook SF calibration, real BoE market data)
+# UK MA ALM Engine: v1 (checkpoint 15: real PRA Rulebook SCR calibration across the board, firm config)
 
 Single platform modelling MA-eligible UK annuity liabilities (fed from FIS
 Prophet) and the assets, MA, PRA matching tests, stresses, Risk Margin and
@@ -12,7 +12,7 @@ python -m venv .venv && .venv/Scripts/pip install pydantic pandas numpy scipy op
 .venv/Scripts/python -m pytest alm/tests/ -v
 ```
 
-138/138 tests pass, all against independent hand/closed-form cross-checks or
+146/146 tests pass, all against independent hand/closed-form cross-checks or
 explicitly-reasoned expected outcomes, not just internal consistency.
 
 Install as a real package (not just "run from checkout"):
@@ -178,15 +178,27 @@ this inside their own infrastructure on a license.
   risk, aggregated via a market correlation matrix into `market_scr`),
   longevity (life risk), counterparty default (cash/deposit exposure only,
   no reinsurance/derivative counterparties modeled yet), and operational
-  risk (flat factor of BEL). Spread (3D17, by credit quality step and the
-  position's own Macaulay duration), currency (3D32, 25%) and interest rate
-  (3D5/3D6, maturity-banded, not a parallel shift) now use the REAL PRA
-  Rulebook Standard Formula calibration -- see `alm/pra_calibration.py`,
-  verified against prarulebook.co.uk and cross-checked against independent
-  sources. Concentration threshold/risk factor, counterparty factors,
-  operational factor and every correlation parameter remain ILLUSTRATIVE
-  PLACEHOLDERS (no published PRA/EIOPA source found for these). `market_scr` + `life` + `counterparty` are
-  aggregated into BSCR via a top-level correlation matrix
+  risk. Spread (3D17, by credit quality step and the position's own
+  Macaulay duration), currency (3D32, 25%), interest rate (3D5/3D6,
+  maturity-banded, not a parallel shift), market risk concentrations
+  (3D26-3D31, by credit quality step, government positions excluded per
+  3D26.4), operational risk (Article 204: 0.45% of life technical
+  provisions, capped at 30% of BSCR) and every correlation parameter used
+  (both the market sub-module matrix and the top-level BSCR matrix) are now
+  the REAL PRA Rulebook / Solvency II Annex IV figures -- see
+  `alm/pra_calibration.py` and `alm/scr/standard_formula.py`, verified
+  against prarulebook.co.uk and cross-checked against independent sources.
+  The market correlation matrix is genuinely conditional, not a fixed
+  table: the interest-rate-vs-spread correlation is 0 or 0.5 depending on
+  whether the 3D5 rise or 3D6 fall shock actually produced the larger loss
+  for that portfolio (`InterestRateScrResult.binding_direction`), matching
+  Annex IV's CorrUp/CorrDown distinction. Only counterparty default remains
+  an ILLUSTRATIVE PLACEHOLDER: the real Article 199 Type 1/Type 2 formula
+  (loss-given-default, PD-by-rating, and a piecewise variance-of-losses
+  aggregation) is substantially more involved than every other sub-module
+  here, and was deliberately left unimplemented rather than risk a subtly
+  wrong regulatory capital formula. `market_scr` + `life` + `counterparty`
+  are aggregated into BSCR via the top-level correlation matrix
   (`scr/correlation.py`'s generic `aggregate_via_correlation`, which the
   old 2-variable spread/longevity formula is now a special case of, with
   no change to its result), then `operational` is added and an optional
@@ -218,6 +230,20 @@ this inside their own infrastructure on a license.
   composed from results the caller already ran with the
   portfolio/scenario appropriate to each, rather than re-deriving a fixed
   pipeline internally.
+- **`alm/config/`**: `FirmConfig`, the single place a firm's valuation
+  date, base/reporting currencies, matching-bucket-frequency assumption,
+  SCR mode and hypothecation algorithm choice, and reconciliation
+  materiality tolerances live -- loadable/saveable as JSON (same pattern as
+  `stresses.scenario_loader`). Doesn't force every function to take a
+  config object (most of this engine's functions already take these values
+  explicitly, a deliberately testable design this module doesn't change);
+  instead exposes `reconciliation_kwargs()` so a firm edits one file rather
+  than hunting through call sites. `material_tolerance`/`watch_tolerance`
+  default to `validation.reconciliation`'s own constants, not a second,
+  possibly-diverging copy. `matching_bucket_frequency` is documented as
+  informational only -- this engine's cash flow models are annual
+  throughout; the field names the assumption rather than silently leaving
+  it implicit, but changing it doesn't yet reproject anything.
 
 ## Things that looked like bugs and weren't (or were, and got fixed)
 
@@ -331,10 +357,13 @@ this inside their own infrastructure on a license.
   than a hardcoded index, but were only checked against the single 31 Aug
   2026 release -- treat that as reducing, not eliminating, the risk that a
   future release reshapes the file in a way this loader doesn't expect.
-- `alm/config/` is still empty (named in the original brief, never
-  filled in): valuation date, currency list, matching-bucket frequency
-  and materiality thresholds are all still passed as explicit function
-  arguments throughout, with no single place to set firm-wide defaults.
+- The counterparty default SCR sub-module still uses an illustrative flat
+  charge by counterparty rating, not the real Article 199 Type 1/Type 2
+  loss-given-default/variance formula -- a deliberate scope decision (see
+  `alm/scr/standard_formula.py` module docstring), not an oversight.
+- `matching_bucket_frequency` in `alm/config/` is informational only: this
+  engine's cash flow models are annual throughout, and changing the field
+  doesn't reproject anything at a different frequency yet.
 
 ## Open inputs needed from the firm (defaults in place, isolated in config)
 
@@ -343,14 +372,17 @@ this inside their own infrastructure on a license.
    extract is available, only that file (plus a thin column-rename
    mapping) needs to change.
 2. **SCR mode**: confirmed: Standard Formula first, then the SS8/18
-   internal-model interface.
+   internal-model interface. Set via `alm/config/`'s `FirmConfig.scr_mode`.
 3. **Hypothecation algorithm**: confirmed default: greedy nearest-maturity
-   per-time-bucket waterfall (`ma/hypothecation.py`), swappable.
+   per-time-bucket waterfall (`ma/hypothecation.py`), swappable. Set via
+   `FirmConfig.hypothecation_algorithm`.
 4. **PRA Test 2 shock calibration**: the interest-rate and FX legs now use
    the real PRA Rulebook Standard Formula calibration (see
    `alm/pra_calibration.py`); the inflation leg (`var_test.ShockSpec.inflation_shock`)
    remains an illustrative placeholder -- no published PRA/EIOPA inflation
-   shock table was found. The SCR concentration/counterparty/operational
-   factors and every correlation parameter in `alm/scr/standard_formula.py`
-   are also still illustrative placeholders, clearly flagged in their
-   comments.
+   shock table was found. Every SCR sub-module except counterparty default
+   (see "Not yet built" above) now uses real PRA Rulebook/Annex IV
+   calibration, including both correlation matrices used in aggregation.
+5. **Reconciliation materiality tolerances**: `FirmConfig.material_tolerance`
+   / `watch_tolerance`, defaulting to `validation.reconciliation`'s existing
+   2%/0.5% constants -- override per firm via a `FirmConfig` JSON file.

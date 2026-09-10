@@ -23,18 +23,20 @@ from alm.examples.golden_toy import (
     build_usd_bond_position,
 )
 from alm.scr import (
-    CONCENTRATION_RISK_FACTOR,
-    CONCENTRATION_THRESHOLD_PCT,
     CURRENCY_SHOCK,
-    MARKET_CORRELATION,
+    MARKET_RISK_CORRELATION_IR_FALL_BINDING,
+    MARKET_RISK_CORRELATION_IR_RISE_BINDING,
     TOP_LEVEL_CORRELATION,
     aggregate_via_correlation,
     compute_concentration_scr,
     compute_counterparty_default_scr,
     compute_currency_scr,
     compute_full_standard_formula_scr,
+    compute_interest_rate_scr,
     compute_operational_scr,
 )
+from alm.pra_calibration import concentration_threshold_and_factor
+from alm.contracts.fs import RatingNotch
 
 CORP_MV = 600_000.0
 USD_MV = 150_000.0
@@ -64,16 +66,20 @@ def test_currency_scr_only_counts_non_base_currency_exposure():
 
 
 def test_concentration_scr_matches_independent_sum_of_squares():
+    """Both bond positions are A2/A3 (CQS2): real 3D29/3D30 threshold 3%,
+    risk factor 21%. Cash is government (g_i = 0) and excluded entirely."""
     _, curve, _, positions = _portfolio()
     result = compute_concentration_scr(positions, curve)
 
     assert result.total_assets == pytest.approx(TOTAL_MV)
 
-    expected_charges = {}
-    for pid, mv in [("pos_corp", CORP_MV), ("pos_usd_corp", USD_MV), ("pos_cash", CASH_MV)]:
+    expected_charges = {"pos_cash": 0.0}
+    for pid, mv in [("pos_corp", CORP_MV), ("pos_usd_corp", USD_MV)]:
+        threshold_pct, risk_factor = concentration_threshold_and_factor(RatingNotch.A2)
+        assert (threshold_pct, risk_factor) == pytest.approx((0.03, 0.21))
         share = mv / TOTAL_MV
-        excess = max(0.0, share - CONCENTRATION_THRESHOLD_PCT)
-        expected_charges[pid] = excess * TOTAL_MV * CONCENTRATION_RISK_FACTOR
+        excess = max(0.0, share - threshold_pct)
+        expected_charges[pid] = excess * TOTAL_MV * risk_factor
 
     for pid, expected in expected_charges.items():
         assert result.charge_by_position[pid] == pytest.approx(expected, rel=1e-9)
@@ -92,28 +98,42 @@ def test_counterparty_default_scr_only_prices_cash_exposure():
     assert result.scr_counterparty == pytest.approx(0.15 * CASH_MV, rel=1e-9)
 
 
-def test_operational_scr_is_a_flat_factor_of_bel():
+def test_operational_scr_is_045pct_of_tp_capped_at_30pct_of_bscr():
     curve = build_rfr_curve()
     liability = build_liability()
     cfs = liability.best_estimate_cashflows(curve.valuation_date)
     bel = cfs.pv(curve)
 
-    result = compute_operational_scr(bel)
+    # comfortably below the cap
+    result = compute_operational_scr(bel, bscr=10_000_000.0)
     assert result.scr_operational == pytest.approx(0.0045 * bel, rel=1e-9)
+    assert result.capped is False
+
+    # a tiny BSCR forces the 30% cap to bind instead
+    capped_result = compute_operational_scr(bel, bscr=100.0)
+    assert capped_result.scr_operational == pytest.approx(0.30 * 100.0, rel=1e-9)
+    assert capped_result.capped is True
 
 
 def test_full_scr_aggregation_matches_independent_two_level_correlation():
     cfs, curve, fs_table, positions = _portfolio()
     result = compute_full_standard_formula_scr(cfs, positions, curve, fs_table, curve.valuation_date)
 
-    # independent re-aggregation, coded directly against the same correlation
-    # tables rather than reusing compute_full_standard_formula_scr's own call chain
+    # independent re-aggregation, coded directly against the same correlation tables rather
+    # than reusing compute_full_standard_formula_scr's own call chain; the IR-vs-spread
+    # correlation depends on which real 3D5/3D6 shock actually bound for this portfolio
+    # (Annex IV), read from an independently-run compute_interest_rate_scr, not assumed
+    independent_ir = compute_interest_rate_scr(cfs, positions, curve, fs_table, curve.valuation_date)
+    market_correlation = (
+        MARKET_RISK_CORRELATION_IR_RISE_BINDING if independent_ir.binding_direction == "rise"
+        else MARKET_RISK_CORRELATION_IR_FALL_BINDING
+    )
     expected_market = aggregate_via_correlation(
         {
             "spread": result.spread.scr_spread, "currency": result.currency.scr_currency,
             "concentration": result.concentration.scr_concentration, "interest_rate": result.interest_rate.scr_interest_rate,
         },
-        MARKET_CORRELATION,
+        market_correlation,
     )
     assert result.market_scr == pytest.approx(expected_market, rel=1e-9)
 
@@ -123,7 +143,10 @@ def test_full_scr_aggregation_matches_independent_two_level_correlation():
     )
     assert result.bscr == pytest.approx(expected_bscr, rel=1e-9)
 
-    expected_total = expected_bscr + result.operational.scr_operational
+    expected_operational = min(0.0045 * result.longevity.base_ma.bel_basic_rfr, 0.30 * expected_bscr)
+    assert result.operational.scr_operational == pytest.approx(expected_operational, rel=1e-9)
+
+    expected_total = expected_bscr + expected_operational
     assert result.scr_total == pytest.approx(expected_total, rel=1e-9)
 
 
@@ -136,6 +159,49 @@ def test_lac_dt_reduces_scr_total_but_never_below_zero():
 
     wiped_out = compute_full_standard_formula_scr(cfs, positions, curve, fs_table, curve.valuation_date, lac_dt=base.bscr + base.operational.scr_operational + 1_000_000.0)
     assert wiped_out.scr_total == 0.0
+
+
+def test_bscr_correlation_life_counterparty_is_the_real_025_not_the_old_placeholder_zero():
+    """Regression test: this codebase previously used 0.00 for the life<->
+    counterparty-default BSCR correlation (an illustrative placeholder);
+    the real Annex IV value, confirmed against two independent sources
+    this session, is 0.25."""
+    assert TOP_LEVEL_CORRELATION[("life", "counterparty")] == pytest.approx(0.25)
+
+
+def test_market_correlation_ir_spread_pair_is_the_only_difference_between_rise_and_fall_variants():
+    diff_keys = {
+        k for k in MARKET_RISK_CORRELATION_IR_RISE_BINDING
+        if MARKET_RISK_CORRELATION_IR_RISE_BINDING[k] != MARKET_RISK_CORRELATION_IR_FALL_BINDING[k]
+    }
+    assert diff_keys == {("interest_rate", "spread")}
+    assert MARKET_RISK_CORRELATION_IR_RISE_BINDING[("interest_rate", "spread")] == pytest.approx(0.0)
+    assert MARKET_RISK_CORRELATION_IR_FALL_BINDING[("interest_rate", "spread")] == pytest.approx(0.5)
+
+
+def test_full_scr_selects_the_matching_correlation_variant_for_whichever_shock_actually_bound():
+    cfs, curve, fs_table, positions = _portfolio()
+    ir = compute_interest_rate_scr(cfs, positions, curve, fs_table, curve.valuation_date)
+    result = compute_full_standard_formula_scr(cfs, positions, curve, fs_table, curve.valuation_date)
+
+    expected_ir_spread_corr = 0.0 if ir.binding_direction == "rise" else 0.5
+    naive_market = aggregate_via_correlation(
+        {
+            "spread": result.spread.scr_spread, "currency": result.currency.scr_currency,
+            "concentration": result.concentration.scr_concentration, "interest_rate": result.interest_rate.scr_interest_rate,
+        },
+        {**MARKET_RISK_CORRELATION_IR_RISE_BINDING, ("interest_rate", "spread"): expected_ir_spread_corr},
+    )
+    assert result.market_scr == pytest.approx(naive_market, rel=1e-9)
+
+
+def test_concentration_scr_excludes_government_positions_entirely():
+    from alm.examples.golden_toy import build_gilt5y_position
+    _, curve, _, positions = _portfolio()
+    gilt = build_gilt5y_position(1_000_000.0)  # a large gilt position -- would dominate concentration if not excluded
+    result = compute_concentration_scr(positions + [gilt], curve)
+    assert result.charge_by_position["pos_gilt5y"] == 0.0
+    assert result.excess_share_by_position["pos_gilt5y"] == 0.0
 
 
 def test_correlation_aggregation_reduces_to_the_old_two_variable_formula():
