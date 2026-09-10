@@ -52,6 +52,19 @@ this inside their own infrastructure on a license.
   deliberately-injected version of the single most common real-world MA
   error (forgetting to net FS out of the rate), which the reconciliation
   correctly flags material.
+- **Real-firm benchmark**: no real UK insurer's underlying policy data
+  is available to this project, so this engine hasn't been run against
+  one. As a substitute sanity check, Astraea's own Standard Formula SCR
+  composition (golden-toy portfolio) is compared against Rothesay Life
+  Plc's real published FY2025 SCR composition (Annual Report &amp;
+  Accounts 2025, Note F.1) -- the split differs (46/50/1/2% vs
+  Rothesay's disclosed 80/10/6/4%), and the note explains why honestly:
+  Rothesay reinsures 91% of its longevity risk, stripping most of the
+  insurance-risk component out of its SCR, while the golden-toy portfolio
+  carries its longevity exposure unreinsured. Also flags plainly that
+  Rothesay uses a PRA-approved Full Internal Model, not the Standard
+  Formula this engine implements, so this is a directional check, not a
+  methodology match.
 - **`alm/licensing/entitlement.py`**: self-hosted license entitlement.
   A signed token (customer, expiry, tier, legal-entity limit) checked
   locally at startup, since there's no vendor-side account to gate access
