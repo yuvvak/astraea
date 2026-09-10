@@ -1,4 +1,11 @@
-# UK MA ALM Engine: v1 (checkpoint 15: real PRA Rulebook SCR calibration across the board, firm config)
+# Astraea: UK MA ALM Engine (v1, checkpoint 15: real PRA Rulebook SCR calibration across the board, firm config)
+
+**Astraea** is the product name for this engine (goddess of justice and
+precision -- fitting for a tool built to independently verify a firm's own
+numbers). The Python package and CLI (`alm`, `alm-license`) keep their
+existing internal names; "Astraea" is the product/company-facing name used
+in documentation, the CV/portfolio copy and the results snapshot, not a
+rename of the codebase itself.
 
 Single platform modelling MA-eligible UK annuity liabilities (fed from FIS
 Prophet) and the assets, MA, PRA matching tests, stresses, Risk Margin and

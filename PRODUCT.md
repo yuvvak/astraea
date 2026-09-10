@@ -16,7 +16,7 @@ Actuaries and risk professionals at a UK life insurer, reviewing the state of an
 
 ## Product Purpose
 
-A one-time results snapshot/report surfacing the numbers produced by the ALM engine built so far: the two-AER Matching Adjustment calculation, all five PRA matching tests (SS7/18 Appendix 1), a market/credit/longevity stress run, Risk Margin, and a Standard Formula SCR skeleton: all run against a small, hand-verifiable "golden" toy portfolio (a 10y level annuity liability backed by a gilt and/or an A2 corporate bond). The reader is deciding whether the methodology and numbers look right, not operating the system day to day.
+A one-time results snapshot/report surfacing the numbers produced by Astraea, the ALM engine built so far: the two-AER Matching Adjustment calculation, all five PRA matching tests (SS7/18 Appendix 1), a market/credit/longevity stress run, Risk Margin, and a Standard Formula SCR skeleton: all run against a small, hand-verifiable "golden" toy portfolio (a 10y level annuity liability backed by a gilt and/or an A2 corporate bond). The reader is deciding whether the methodology and numbers look right, not operating the system day to day.
 
 ## Positioning
 
