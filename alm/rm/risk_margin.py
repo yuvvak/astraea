@@ -4,15 +4,15 @@ tapering.
   RM = CoC * sum_{t=0}^{n} taper(t) * SCR(t) / (1 + r_basic(t+1))^(t+1)
   taper(t) = max(lambda^t, floor)
 
-Named constants per the project brief: CoC = 4%, life taper lambda = 0.9,
-floor = 0.25. SCR(t) is the capital for non-hedgeable risks of the reference
-undertaking after transfer of the MA portfolio (longevity, expense, residual
-operational, non-hedgeable credit on FS, etc.) -- this module does not
-compute SCR(t) itself (see `alm.scr` for the Standard Formula base-date SCR);
-it either takes a full user-supplied runoff path, or approximates one.
+CoC = 4%, life taper lambda = 0.9, floor = 0.25. SCR(t) is the capital for
+non-hedgeable risks of the reference undertaking after transfer of the MA
+portfolio (longevity, expense, residual operational, non-hedgeable credit
+on FS, etc.). This module doesn't compute SCR(t) itself (see `alm.scr`
+for the Standard Formula base-date SCR), it either takes a full
+user-supplied runoff path, or approximates one.
 
-Discounting is on the BASIC RFR curve only -- no MA, no VA (project brief:
-"RM is not inside the MA discounting of BEL").
+Discounting is on the basic RFR curve only, no MA, no VA: Risk Margin
+sits outside the MA discounting of BEL.
 """
 
 from __future__ import annotations
@@ -22,9 +22,9 @@ from pydantic import BaseModel, ConfigDict
 from alm.contracts.cashflows import CashFlowVector
 from alm.contracts.curves import Curve
 
-RM_COST_OF_CAPITAL = 0.04    # Solvency UK reform; project brief "CoC = 4%"
-RM_TAPER_LAMBDA = 0.90       # project brief "life taper λ = 0.9"
-RM_TAPER_FLOOR = 0.25        # project brief "floor 0.25"
+RM_COST_OF_CAPITAL = 0.04    # Solvency UK reform cost-of-capital rate
+RM_TAPER_LAMBDA = 0.90       # life taper lambda
+RM_TAPER_FLOOR = 0.25        # taper floor
 
 
 def taper_factor(t: int, lam: float = RM_TAPER_LAMBDA, floor: float = RM_TAPER_FLOOR) -> float:
@@ -68,10 +68,9 @@ def approximate_scr_runoff(
     curve: Curve,
     n_years: int,
 ) -> dict[int, float]:
-    """Standard annuity approximation (project brief: "standard annuity
-    approximations (duration / risk-driver runoff) with explicit
-    assumptions") when a full projected SCR(t) path isn't supplied:
-    SCR(t) ~= SCR(0) * BEL(t) / BEL(0), where BEL(t) is the present value at
+    """Standard annuity approximation for when a full projected SCR(t)
+    path isn't supplied: SCR(t) ~= SCR(0) * BEL(t) / BEL(0), where BEL(t)
+    is the present value at
     time t (forward-valued from today's curve) of liability cash flows
     remaining after t -- i.e. non-hedgeable risk capital is assumed to run
     off proportionally to the remaining liability, a common simplification

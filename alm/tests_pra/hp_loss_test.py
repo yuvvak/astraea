@@ -5,14 +5,14 @@ permitted bounds that minimises MA benefit, and check that the resulting MA
 loss (relative to the expected-profile MA benefit) does not exceed the
 threshold (5%, PRA default).
 
-v1 methodology (SS7/18 leaves this as a firm methodology choice -- see
-project brief, "implement a default and make it configurable; document the
-choice"): market value is a today-observable fact and does not itself change
-under a hypothetical future repayment scenario, so instead of perturbing MV
-(which -- checked explicitly in this engine -- moves the MA rate the WRONG
-way: a *lower* asset-side PV target makes the two-AER solve return a
-*higher* r1, since r1 is solved purely from "what flat rate reproduces this
-target PV", independent of adequacy) this isolates the asset's OWN
+SS7/18 leaves the methodology here as a firm choice, so this is a
+documented default, configurable rather than hard-coded. Market value is
+a today-observable fact and doesn't itself change under a hypothetical
+future repayment scenario, so instead of perturbing MV (which moves the
+MA rate the wrong way here: a lower asset-side PV target makes the
+two-AER solve return a higher r1, since r1 is solved purely from "what
+flat rate reproduces this target PV", independent of adequacy) this
+isolates the asset's own
 achievable yield under each profile, at the SAME market value:
 
   r_asset_expected    = AER solving PV(expected_cash flows,    r) = MV

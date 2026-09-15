@@ -1,22 +1,19 @@
 """HP MA benefit cap: aggregate MA benefit from Highly Predictable assets
-must not exceed a set fraction of total MA benefit (project brief: "Enforce
-HP cap: aggregate MA benefit from HP assets <= 10% of total MA benefit. If
-breach, reduce HP MA / hold extra FS / report breach, make the policy a
-config switch with the regulatory default"). 10% is the regulatory default,
-named as a constant, not inlined, and passed as a parameter so a firm policy
-can override it without touching this function.
+must not exceed a set fraction of total MA benefit. 10% is the regulatory
+default, named as a constant rather than inlined, and passed as a
+parameter so a firm policy can override it without touching this function.
 
-This module only checks and reports the breach and the excess amount; it
-does not decide *how* to remediate (reduce HP MA vs hold extra FS is a firm
-policy choice per the brief) -- callers act on `HPCapResult.breach` and
-`excess_benefit` according to their own chosen remediation.
+This module only checks and reports the breach and the excess amount, it
+doesn't decide how to remediate. Reducing HP MA vs holding extra FS is a
+firm policy choice, so callers act on `HPCapResult.breach` and
+`excess_benefit` according to whatever remediation they choose.
 """
 
 from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-HP_CAP_RATIO = 0.10  # regulatory default; project brief "<= 10% of total MA benefit"
+HP_CAP_RATIO = 0.10  # regulatory default: <= 10% of total MA benefit
 
 
 class HPCapResult(BaseModel):

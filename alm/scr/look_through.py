@@ -1,10 +1,10 @@
-"""Look-through funds (project brief: "Look-through funds"): expand any
-`FundHolding` position into its constituent positions before running SF
-SCR sub-modules that need name-, currency-, or rating-level granularity
-(spread, currency, concentration, counterparty default) -- treating a fund
-as one opaque exposure would hide concentration and currency risk sitting
-inside it. Non-fund positions pass through unchanged. Funds nested inside
-funds are expanded recursively.
+"""Look-through funds: expand any `FundHolding` position into its
+constituent positions before running SF SCR sub-modules that need name-,
+currency-, or rating-level granularity (spread, currency, concentration,
+counterparty default). Treating a fund as one opaque exposure would hide
+the concentration and currency risk sitting inside it. Non-fund positions
+pass through unchanged, and funds nested inside funds are expanded
+recursively.
 """
 
 from __future__ import annotations

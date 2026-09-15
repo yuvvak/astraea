@@ -1,8 +1,7 @@
-"""The annual MA attestation data pack (project brief: "Annual MA
-attestation data pack (FS additions, HP cash-flow cap, matching evidence)"),
-a narrower, MALIR-specific view than the general `ReportingPack`: exactly
-the three named components the brief calls for, front and centre, rather
-than everything the engine can produce.
+"""The annual MA attestation data pack: a narrower, MALIR-specific view
+than the general `ReportingPack`, putting FS additions, the HP cash-flow
+cap, and matching evidence front and centre rather than everything the
+engine can produce.
 """
 
 from __future__ import annotations

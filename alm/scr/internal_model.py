@@ -1,19 +1,18 @@
 """Internal-model SCR interface (SS8/18): scenario set in, stressed values
-out, MA engine rerun per the SS8/18 five-step logic (revalue assets; update
-FS; check MA criteria still met; recompute MA; own-funds) -- which is
-exactly what `stresses.run_stress` already does. This module is the
+out, MA engine rerun per the SS8/18 five-step logic (revalue assets;
+update FS; check MA criteria still met; recompute MA; own-funds), which
+is exactly what `stresses.run_stress` already does. This module is the
 scenario-set-to-SCR contract on top of it, not a new stress mechanism.
 
-Project brief: "Do not build a full economic-scenario generator in v1;
-define the contract and a file-based scenario runner." Accordingly, this is
-a NAMED-SCENARIO internal model (SCR = the worst own-funds loss across a
-curated, firm-supplied scenario set -- e.g. a LIST/ORSA pack loaded via
+Deliberately scoped down to a named-scenario internal model rather than a
+full economic scenario generator: SCR is the worst own-funds loss across
+a curated, firm-supplied scenario set (e.g. a LIST/ORSA pack loaded via
 `stresses.scenario_loader`), not a percentile of a simulated loss
-distribution: there is no scenario generator here, and "the 99.5th
-percentile of N scenarios" would be a meaningless statistic for the small,
-hand-picked scenario sets this is designed to run. A firm with a real
-stochastic ESG can build its own percentile aggregation on top of the same
-per-scenario `StressResult` objects this returns.
+distribution. There's no scenario generator here, and "the 99.5th
+percentile of N scenarios" would be a meaningless statistic for the
+small, hand-picked scenario sets this is designed to run. A firm with a
+real stochastic ESG can build its own percentile aggregation on top of
+the same per-scenario `StressResult` objects this returns.
 """
 
 from __future__ import annotations

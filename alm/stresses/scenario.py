@@ -1,24 +1,21 @@
-"""Stress scenario definitions: a `StressSpec` names a shock and how to apply
-it to the base curve / FS table / liability cash flows. File-based scenario
-sets (project brief: "Combined LIST-style and firm ORSA scenarios via
-scenario files") are a natural extension of this -- `StressSpec` is already
-a pydantic model, so a scenario file is just a list of these serialised to
-JSON/YAML; that loader is not built yet (v1 default: construct `StressSpec`
-directly in code/tests), the shape is fixed here so it slots in later
-without changing `runner.py`.
+"""Stress scenario definitions: a `StressSpec` names a shock and how to
+apply it to the base curve / FS table / liability cash flows.
+`StressSpec` is a plain pydantic model, so a scenario file (combining
+LIST-style and firm ORSA scenarios) is just a list of these serialised to
+JSON, loaded by `scenario_loader.py`.
 
-v1 covers three stress families, matching what the golden portfolio can
+Covers three stress families, matching what the golden portfolio can
 actually exercise:
   - parallel nominal rate shock (curve_shift_bps)
   - credit spread widening (fs_widening_multiplier, applied to FS PD+CoD
-    multiplicatively -- "instantaneous downgrade matrices" and "rating
-    migration" are more granular versions of this same mechanism, deferred
-    until a fuller asset library exists)
+    multiplicatively; instantaneous downgrade matrices and rating
+    migration are more granular versions of this same mechanism,
+    deferred until a fuller asset library exists)
   - a longevity/mortality-style liability shock (liability_shock_multiplier,
-    a crude uniform scaling proxy -- real longevity/mortality stresses
-    belong in Prophet or the reference projector re-running with a shocked
-    assumption set, not a flat multiplier; this is a placeholder for the
-    "insurance stresses" family until that's wired up)
+    a crude uniform scaling proxy; real longevity/mortality stresses
+    belong in Prophet or the reference projector re-running with a
+    shocked assumption set, not a flat multiplier. This is a placeholder
+    for the insurance-stresses family until that's wired up)
 """
 
 from __future__ import annotations

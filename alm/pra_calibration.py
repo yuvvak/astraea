@@ -151,9 +151,9 @@ def spread_stress_pct(rating: RatingNotch, duration: float) -> float:
 # ------------------------------------------------- 3D26-3D31: market risk concentrations ---
 
 # 3D29: relative excess exposure threshold by CQS. 3D30: risk factor (g_i) by CQS. Both
-# verified against prarulebook.co.uk this session; independently cross-checked against the
-# EU Delegated Regulation Article 186/187 values (same figures, confirming the PRA's onshored
-# rule hasn't diverged from the original EU calibration for this sub-module).
+# checked against prarulebook.co.uk and cross-checked against the EU Delegated Regulation
+# Article 186/187 values (same figures, so the PRA's onshored rule hasn't diverged from
+# the original EU calibration here).
 CONCENTRATION_THRESHOLD_BY_CQS: dict[int, float] = {0: 0.03, 1: 0.03, 2: 0.03, 3: 0.015, 4: 0.015, 5: 0.015, 6: 0.015}
 CONCENTRATION_RISK_FACTOR_BY_CQS: dict[int, float] = {0: 0.12, 1: 0.12, 2: 0.21, 3: 0.27, 4: 0.73, 5: 0.73, 6: 0.73}
 # Unrated exposures: the rule's exact branching (pre-disclosure ECAI / counterparty's own

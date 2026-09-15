@@ -1,17 +1,15 @@
 """Reporting pack: consolidates already-computed MA, matching-test, stress,
-Risk Margin and SCR results into one structured object (the "QRT-like
-structured output"), a markdown narrative (the "MA pack" / "matching-test
-pack"), and a timestamped JSON export (a MALIR-style evidence file --
-project brief: "Annual MA attestation data pack (FS additions, HP cash-flow
-cap, matching evidence)").
+Risk Margin and SCR results into one structured object, a markdown
+narrative, and a timestamped JSON export in the style of a MALIR evidence
+file.
 
-Deliberately composed from already-computed results rather than re-running
-the pipeline internally: different tests in this codebase legitimately use
-different portfolio slices (Tests 1-3 run on the 3-asset portfolio, Tests
-4-5 on a standalone HP bond, stresses on the single-corporate-bond
-scenario), matching how a real firm actually works -- each calculation is
-run with the portfolio/scenario appropriate to it, and the reporting pack's
-job is only to consolidate and present the results, not to decide which
+Composed from already-computed results rather than re-running the
+pipeline internally, because different tests in this codebase legitimately
+use different portfolio slices (Tests 1-3 run on the 3-asset portfolio,
+Tests 4-5 on a standalone HP bond, stresses on the single-corporate-bond
+scenario), matching how a real firm actually works: each calculation runs
+with the portfolio/scenario appropriate to it, and the reporting pack's
+job is just to consolidate and present the results, not decide which
 portfolio backs which test.
 """
 

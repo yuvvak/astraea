@@ -1,12 +1,10 @@
 """MAIA (Matching Adjustment Investment Accelerator) tracking: the 24-month
 regularisation clock and the exposure limit, min(5% of MA BEL net of
-reinsurance, GBP 2bn) or a tighter firm-specific limit (project brief:
-"MAIA assets (flag, 24-month regularisation clock, exposure vs min(5% MA
-BEL net of RI, GBP 2bn) or firm-specific limit)").
+reinsurance, GBP 2bn) or a tighter firm-specific limit.
 
-This module only checks and reports; it does not decide remediation
-(recapture, reclassification, or an application for an extension are firm/
-PRA process decisions outside this engine's scope).
+This module only checks and reports. It doesn't decide remediation:
+recapture, reclassification, or an application for an extension are firm/
+PRA process decisions outside this engine's scope.
 """
 
 from __future__ import annotations
@@ -18,9 +16,9 @@ from pydantic import BaseModel, ConfigDict
 from alm.contracts.assets import AssetPosition
 from alm.contracts.curves import Curve
 
-MAIA_REGULARISATION_MONTHS = 24  # project brief "24-month regularisation clock"
-MAIA_EXPOSURE_PCT_OF_BEL = 0.05  # project brief "5% MA BEL net of RI"
-MAIA_EXPOSURE_HARD_CAP_GBP = 2_000_000_000.0  # project brief "GBP 2bn"
+MAIA_REGULARISATION_MONTHS = 24
+MAIA_EXPOSURE_PCT_OF_BEL = 0.05
+MAIA_EXPOSURE_HARD_CAP_GBP = 2_000_000_000.0
 
 
 class MAIARegularisationStatus(BaseModel):

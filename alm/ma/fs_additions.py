@@ -1,11 +1,8 @@
 """Firm FS additions: named add-ons to the published FS rate for
-attestation, structure, construction, prepayment and HP risk (project
-brief, MA pipeline step 4: "Apply firm FS additions (attestation /
-structure / construction / prepayment / HP)"). Kept as a distinct,
-separately-reportable layer on top of `fs_rate.fs_rate_for_assets`'s
-blended PD+CoD+LTAS rate, rather than folded silently into it, because the
-annual MA attestation data pack (project brief, "Annual MA attestation
-data pack (FS additions, HP cash-flow cap, matching evidence)") needs to
+attestation, structure, construction, prepayment and HP risk. Kept as a
+distinct, separately-reportable layer on top of
+`fs_rate.fs_rate_for_assets`'s blended PD+CoD+LTAS rate, rather than
+folded silently into it, since the annual MA attestation pack needs to
 report these components individually, not just their sum.
 """
 

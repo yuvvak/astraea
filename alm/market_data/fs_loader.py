@@ -1,14 +1,13 @@
-"""PRA Fundamental Spread table loader (project brief: "Fundamental Spreads
-(PD, CoD, LTAS floor), by currency, rating, sector, term ... ingest official
-XLSX; do not hard-code spreads").
+"""PRA Fundamental Spread table loader (PD, CoD, LTAS floor, by currency,
+rating, sector, term), reading the official XLSX rather than hard-coding
+spreads.
 
-Same documented-v1-default posture as `rfr_loader.py`: this defines a
-simple, unambiguous long format (one row per currency/rating/sector/
-term-bucket combination) for `load_fs_table_from_xlsx` below, rather than
-requiring every caller to know the PRA's actual published layout.
-`load_fs_table_from_pra_workbook` (further down this file) is the adapter
-for the REAL published workbook, verified against the 31 Aug 2026 release
-now checked into `alm/market_data/pra_reference/`.
+Same approach as `rfr_loader.py`: defines a simple, unambiguous long
+format (one row per currency/rating/sector/term-bucket combination) for
+`load_fs_table_from_xlsx` below, rather than requiring every caller to
+know the PRA's actual published layout. `load_fs_table_from_pra_workbook`
+(further down this file) is the adapter for the real published workbook,
+checked against the 31 Aug 2026 release in `alm/market_data/pra_reference/`.
 
 Expected columns (any sheet name, first sheet read by default):
   currency        ISO 4217, e.g. "GBP"

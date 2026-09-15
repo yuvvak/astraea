@@ -1,13 +1,13 @@
-"""Documented interface spec for the Prophet cash flow extract this adapter
-consumes (project brief deliverable 10: "exact columns the extract must
-contain"). No sample extract has been supplied yet -- this is a v1 default
-schema, isolated here as the single point of contact with Prophet, so that
-when a real extract layout is available only this file (plus a thin column-
-rename mapping) needs to change, not `adapter.py` or anything downstream.
+"""Documented interface spec for the Prophet cash flow extract this
+adapter consumes. No sample extract has been supplied yet, so this is a
+v1 default schema, isolated here as the single point of contact with
+Prophet: once a real extract layout is available, only this file (plus a
+thin column-rename mapping) needs to change, not `adapter.py` or anything
+downstream.
 
-Format: long/denormalised CSV or parquet, **one row per model point per
-projection period**. Static (non-time-varying) model point attributes are
-repeated on every row for that model point -- this trades file size for a
+Format: long/denormalised CSV or parquet, one row per model point per
+projection period. Static (non-time-varying) model point attributes are
+repeated on every row for that model point, trading file size for a
 trivial, join-free load. `product_code` maps 1:1 to
 `alm.contracts.model_points.ProductCode`.
 

@@ -1,9 +1,8 @@
-"""File-based scenario sets for `StressSpec` (project brief: "Combined
-LIST-style and firm ORSA scenarios via scenario files"). A scenario file is
-just a JSON list of `StressSpec`-shaped objects; since `StressSpec` is
-already a pydantic model, loading is validation, not parsing, so a
-malformed scenario file fails loudly rather than silently producing a
-no-op stress.
+"""File-based scenario sets for `StressSpec`, combining LIST-style and firm
+ORSA scenarios via scenario files. A scenario file is just a JSON list of
+`StressSpec`-shaped objects; since `StressSpec` is already a pydantic
+model, loading is validation, not parsing, so a malformed scenario file
+fails loudly rather than silently producing a no-op stress.
 """
 
 from __future__ import annotations

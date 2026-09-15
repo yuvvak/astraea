@@ -1,18 +1,15 @@
 """SIG cap: MA on sub-investment-grade (SIG) assets cannot exceed MA on
-investment-grade assets of the same duration and asset class (MA rule; see
-project brief "Apply SIG cap: MA on sub-investment-grade assets cannot
-exceed MA on IG assets of same duration and asset class; lift FS if
-needed"). When a SIG asset's raw two-AER MA rate breaches the cap, FS is
-"lifted" (increased) just enough that the recomputed MA rate equals the cap
-exactly -- never silently truncated, so the FS breakdown stays auditable
-(project brief non-functional requirement: "every MA bp traceable to asset
-CFs, FS table version, hypothecation set").
+investment-grade assets of the same duration and asset class. When a SIG
+asset's raw two-AER MA rate breaches the cap, FS is lifted (increased)
+just enough that the recomputed MA rate equals the cap exactly, never
+silently truncated, so the FS breakdown stays auditable back to asset cash
+flows, FS table version and hypothecation set.
 
-v1 methodology: no real IG spread-curve-by-duration table has been
-supplied, so `SIG_CAP_MA_RATE` is a single illustrative flat cap (150bp),
-clearly flagged as a placeholder -- swap it for a duration-graded curve
-sourced from the firm's actual IG asset holdings once available; the cap
-mechanism itself (lift FS until MA == cap) does not change.
+No real IG spread-curve-by-duration table is available, so
+`SIG_CAP_MA_RATE` is a single illustrative flat cap (150bp), flagged as a
+placeholder. Swap it for a duration-graded curve sourced from the firm's
+actual IG asset holdings once available; the cap mechanism itself (lift FS
+until MA == cap) doesn't change.
 """
 
 from __future__ import annotations

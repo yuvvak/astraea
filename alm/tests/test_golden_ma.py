@@ -1,9 +1,7 @@
 """Golden-file tests: MA, BEL and the AER solver checked against independent
 hand/closed-form calculations, not just against the engine's own internals.
-
-Deliverable 9 ("golden test: small portfolio where MA bps ... can be checked
-by hand") and the instruction to reproduce the toy gilt-vs-annuity example
-before any further module is scaffolded.
+A small portfolio sized so the MA bps can be checked by hand, built before
+scaffolding any further module.
 """
 
 from __future__ import annotations

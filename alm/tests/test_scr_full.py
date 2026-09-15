@@ -164,8 +164,8 @@ def test_lac_dt_reduces_scr_total_but_never_below_zero():
 def test_bscr_correlation_life_counterparty_is_the_real_025_not_the_old_placeholder_zero():
     """Regression test: this codebase previously used 0.00 for the life<->
     counterparty-default BSCR correlation (an illustrative placeholder);
-    the real Annex IV value, confirmed against two independent sources
-    this session, is 0.25."""
+    the real Annex IV value, confirmed against two independent sources,
+    is 0.25."""
     assert TOP_LEVEL_CORRELATION[("life", "counterparty")] == pytest.approx(0.25)
 
 

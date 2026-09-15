@@ -83,12 +83,12 @@ class AmortizingLoan(BaseModel):
     """An amortizing loan: interest + scheduled principal repayment each
     period, no bullet at maturity. Covers infrastructure debt, project
     finance, social housing and CRE loans, and ERM-restructured notes
-    (project brief: "ERM/lifetime mortgages, usually via MA-eligible
-    restructured notes -- model the note CFs in the MA portfolio") -- these
-    are grouped under one instrument here because they share the same cash
-    flow shape (interest-plus-scheduled-principal); what differs between
-    them in practice (covenant structure, prepayment terms, seniority) is
-    not yet modelled.
+    (equity release mortgages usually get securitised into MA-eligible
+    notes, so we just model the note cash flows here). These are grouped
+    under one instrument because they share the same cash flow shape
+    (interest plus scheduled principal); what differs between them in
+    practice (covenant structure, prepayment terms, seniority) isn't
+    modelled yet.
 
     `amortization_style`:
     - "level_principal": equal principal repaid each period (interest
@@ -153,9 +153,7 @@ class AmortizingLoan(BaseModel):
 
 class InterestRateSwap(BaseModel):
     """Vanilla fixed-for-floating interest rate swap, used to extend or
-    adjust matching duration (project brief: "Interest-rate and inflation
-    derivatives used for matching (swaps, IL swaps) where they meet MA
-    asset conditions").
+    adjust matching duration where it meets MA asset conditions.
 
     Unlike Bond/Cash/AmortizingLoan (whose contractual cash flows are fixed
     at construction and independent of any curve), a swap's floating leg is
@@ -245,8 +243,7 @@ class InterestRateSwap(BaseModel):
 class InflationSwap(BaseModel):
     """Year-on-year inflation swap: one leg pays a fixed rate, the other
     pays realized inflation, used to match inflation-linked liabilities
-    without holding an IL gilt directly (project brief: "Interest-rate and
-    inflation derivatives used for matching (swaps, IL swaps)").
+    without holding an IL gilt directly.
 
     Same construction pattern as `InterestRateSwap`: expected net cash
     flows are projected and frozen at construction via `from_assumption`,
@@ -322,22 +319,20 @@ class InflationSwap(BaseModel):
 class ReinsuranceRecoverable(BaseModel):
     """A reinsurance recoverable: the insurer's expected recovery schedule
     from a reinsurance counterparty, ceded against (a portion of) the
-    underlying liability cash flows (project brief: "Reinsurance accepted
-    of the above (inwards), and outwards reinsurance / funded reinsurance
-    as a reduction to liability CFs plus collateral/recapture hooks").
+    underlying liability cash flows.
 
-    Unlike a bond, there is no coupon/notional structure -- the recovery
+    Unlike a bond, there's no coupon/notional structure. The recovery
     schedule is supplied directly as (time, amount) pairs, since it mirrors
     whatever portion of the ceded liability cash flows the treaty covers.
 
     `is_funded` / `collateral_value`: for funded reinsurance, collateral
-    held against the counterparty reduces NET COUNTERPARTY EXPOSURE (used
-    by the counterparty default SCR sub-module), but is deliberately never
-    netted into `price()` / market value -- project brief, explicit
-    warning: "do not treat FundedRe collateral as automatically MA-eligible".
-    The asset's own MV (what backs the MA calculation) is always the gross
-    expected recovery PV; collateral is a counterparty-risk mitigant
-    tracked separately, not a reduction to the recoverable itself.
+    held against the counterparty reduces net counterparty exposure (used
+    by the counterparty default SCR sub-module), but is never netted into
+    `price()` / market value. Don't treat funded-Re collateral as
+    automatically MA-eligible: the asset's own MV (what backs the MA
+    calculation) is always the gross expected recovery PV, and collateral
+    is a counterparty-risk mitigant tracked separately, not a reduction to
+    the recoverable itself.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -396,17 +391,16 @@ class Cash(BaseModel):
 class FundHolding(BaseModel):
     """A fund holding, modelled on a look-through basis: `constituent_positions`
     is the fund's actual underlying holdings, and SCR sub-modules that need
-    look-through treatment (spread, currency, concentration, counterparty --
-    project brief: "Look-through funds") expand a `FundHolding` position into
-    those constituents rather than treating the fund as one opaque exposure.
-    See `scr.look_through.expand_look_through`.
+    look-through treatment (spread, currency, concentration, counterparty)
+    expand a `FundHolding` position into those constituents rather than
+    treating the fund as one opaque exposure. See
+    `scr.look_through.expand_look_through`.
 
     Not wired into `ma.hypothecation`'s cash-flow-matching waterfall or the
-    MA calculation itself -- look-through is scoped to SCR in this v1 (the
-    brief ties it specifically to the SF SCR context); a fund's aggregate
-    cash flows/price (via `contractual_cashflows`/`price` below) are still
-    well-defined for MA/BEL purposes, just not decomposed into constituents
-    there.
+    MA calculation itself, look-through is scoped to SCR for now. A fund's
+    aggregate cash flows/price (via `contractual_cashflows`/`price` below)
+    are still well-defined for MA/BEL purposes, just not decomposed into
+    constituents there.
     """
 
     model_config = ConfigDict(frozen=True)

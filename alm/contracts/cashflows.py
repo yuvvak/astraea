@@ -88,9 +88,9 @@ class CashFlowVector(BaseModel):
         that e.g. reinsurance recoveries (which reduce net insurer outgo) net
         off against benefit/expense outgo rather than adding to it. Default
         signs: everything is +1 (adds to outgo/income) except REINSURANCE,
-        which is -1 -- see project brief, "outwards reinsurance ... as a
-        reduction to liability CFs". Resulting flows are tagged CashFlowKind.OTHER
-        since they no longer represent a single original kind.
+        which is -1, since outwards reinsurance reduces liability cash
+        flows. Resulting flows are tagged CashFlowKind.OTHER since they no
+        longer represent a single original kind.
         """
         signs = sign_by_kind or {k: (-1 if k == CashFlowKind.REINSURANCE else 1) for k in CashFlowKind}
         totals: dict[float, float] = {}

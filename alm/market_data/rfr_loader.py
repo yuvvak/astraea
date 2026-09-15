@@ -1,17 +1,15 @@
-"""PRA risk-free rate curve loader (project brief: "PRA published technical
-information: risk-free curves... by currency... ingest official XLSX; do
-not hard-code spreads").
+"""PRA risk-free rate curve loader, reading the official published XLSX
+rather than hard-coding curve points.
 
 The PRA's actual monthly RFR workbook is a wide, multi-tab format (one tab
 per currency, one column per term point, separate tabs for the basic curve
 vs with-MA/with-VA variants and their up/down shocks). Rather than force
 every caller to know that layout, `load_rfr_curve_from_xlsx` below defines
-and documents a simple, unambiguous **long format** instead: one row per
-(currency, term) pair. This is the same pattern used for `prophet_io`'s
-extract schema: a documented v1 default, isolated behind one small module.
+a simple, unambiguous long format instead: one row per (currency, term)
+pair, the same pattern used for `prophet_io`'s extract schema.
 `load_rfr_curve_from_pra_workbook` (further down this file) is the adapter
-for the REAL published workbook, verified against the 31 Aug 2026 release
-now checked into `alm/market_data/pra_reference/`.
+for the real published workbook, checked against the 31 Aug 2026 release
+in `alm/market_data/pra_reference/`.
 
 Expected columns (any sheet name, first sheet read by default):
   currency      ISO 4217, e.g. "GBP"

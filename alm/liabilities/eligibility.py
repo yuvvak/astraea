@@ -2,11 +2,10 @@
 reference projector) must pass through `evaluate_eligibility` before its cash
 flows are allowed anywhere near the MA engine. Fails closed: an unrecognised
 product code, or a recognised one with a disqualifying flag set, is
-ineligible -- it is never silently included (project brief: "Flag ineligible
-contracts rather than silently including them.").
+ineligible and never silently included.
 
-Citations are named constants, not inlined, per the brief's non-functional
-requirement that every regulatory threshold/rule be traceable in comments.
+Citations are named constants rather than inlined, so every regulatory
+threshold or rule stays traceable back to its source.
 """
 
 from __future__ import annotations
@@ -16,14 +15,14 @@ from pydantic import BaseModel, ConfigDict
 from alm.contracts.model_points import ModelPointAttributes, ProductCode
 
 # IRPR = Insurance and Reinsurance Undertakings (Prudential Requirements) Regulations 2023
-CITATION_NO_FUTURE_PREMIUMS = "MA 2.2(1)/2.5; IRPR reg 5 -- no future premium-paying contracts except specified eligible elements"
-CITATION_NO_DISCRETIONARY_WP = "MA 2.3/2.5 -- with-profits contracts eligible only for the contractually guaranteed, non-discretionary component"
-CITATION_NO_UNIT_LINKED = "MA 2.2 -- unit-linked/drawdown benefits are not MA-eligible (benefit value depends on investment performance)"
-CITATION_CONSTRAINED_SURRENDER = "MA 2.2(4)(b) -- deferred annuity surrender/CETV/PCLS only eligible where surrender value <= value of covering assets at exercise"
-CITATION_UNCONSTRAINED_SURRENDER = "MA 2.2 -- policyholder options other than the MA 2.2(4)(b)-constrained surrender are not MA-eligible"
-CITATION_UNKNOWN_PRODUCT = "Not on the firm's MA-eligible product list (project brief scope) -- fails closed pending explicit classification"
-CITATION_ELIGIBLE_BASE = "MA 2.2 -- eligible individual/BPA annuity in payment, no future premiums, no disqualifying options"
-CITATION_ELIGIBLE_ELEMENT = "MA 2.3/2.5 -- eligible element of an otherwise ineligible contract"
+CITATION_NO_FUTURE_PREMIUMS = "MA 2.2(1)/2.5; IRPR reg 5: no future premium-paying contracts except specified eligible elements"
+CITATION_NO_DISCRETIONARY_WP = "MA 2.3/2.5: with-profits contracts eligible only for the contractually guaranteed, non-discretionary component"
+CITATION_NO_UNIT_LINKED = "MA 2.2: unit-linked/drawdown benefits are not MA-eligible (benefit value depends on investment performance)"
+CITATION_CONSTRAINED_SURRENDER = "MA 2.2(4)(b): deferred annuity surrender/CETV/PCLS only eligible where surrender value <= value of covering assets at exercise"
+CITATION_UNCONSTRAINED_SURRENDER = "MA 2.2: policyholder options other than the MA 2.2(4)(b)-constrained surrender are not MA-eligible"
+CITATION_UNKNOWN_PRODUCT = "Not on the firm's MA-eligible product list - fails closed pending explicit classification"
+CITATION_ELIGIBLE_BASE = "MA 2.2: eligible individual/BPA annuity in payment, no future premiums, no disqualifying options"
+CITATION_ELIGIBLE_ELEMENT = "MA 2.3/2.5: eligible element of an otherwise ineligible contract"
 
 
 class EligibilityResult(BaseModel):

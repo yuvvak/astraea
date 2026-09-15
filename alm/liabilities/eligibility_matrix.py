@@ -1,10 +1,9 @@
-"""Eligibility matrix generator (deliverable 2: "Eligibility matrix
-(product x feature to eligible / eligible-element / fail) with rule
-citations"). Every row is produced by actually running
-`evaluate_eligibility` against a constructed `ModelPointAttributes`, so the
-matrix can never drift from the code that decides real cases: it is a
-report of the gate's behaviour, not a hand-typed table someone forgot to
-update after a rule changed.
+"""Generates a product x feature eligibility matrix (eligible /
+eligible-element / fail, with rule citations). Every row is produced by
+actually running `evaluate_eligibility` against a constructed
+`ModelPointAttributes`, so the matrix can't drift from the code that
+decides real cases: it's a report of the gate's actual behaviour, not a
+hand-typed table someone forgot to update after a rule changed.
 """
 
 from __future__ import annotations
