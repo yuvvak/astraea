@@ -1,7 +1,7 @@
 """Component A/B/C hypothecation: greedy nearest-maturity cash-flow-matching
-waterfall (the confirmed v1 default -- see README "open inputs"; swap the
-`hypothecate` function body for the firm's actual algorithm later, nothing
-downstream depends on the algorithm being greedy).
+waterfall. This is the v1 default algorithm; swap the `hypothecate`
+function body for a firm's actual algorithm later, nothing downstream
+depends on it being greedy.
 
 Component A: PD-adjusted asset cash flows assigned to replicate liability
 cash flows *bucket by bucket*, nearest-maturity asset first, never assigning

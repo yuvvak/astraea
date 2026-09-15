@@ -1,17 +1,15 @@
 """Real PRA Rulebook Standard Formula market-risk calibration data (3D
-Market Risk Module), verified against prarulebook.co.uk during this
-session: interest rate risk (3D4-3D6), spread risk on bonds/loans (3D17),
-and the FX shock (3D32).
+Market Risk Module): interest rate risk (3D4-3D6), spread risk on
+bonds/loans (3D17), and the FX shock (3D32). Checked against
+prarulebook.co.uk.
 
-Deliberately a standalone, dependency-free module (only `alm.contracts`) so
-that BOTH `alm.scr` (the SCR sub-modules) and `alm.tests_pra` (PRA Test 2's
-VaR shocks) can reuse the same real calibration without creating a
-scr<->stresses<->tests_pra import cycle -- `alm.scr.standard_formula`
-depends on `alm.stresses.runner` (for swap reprojection under stress),
-which depends on `alm.tests_pra.accumulated_cf_shortfall`; if this
-calibration data lived inside `alm.scr` instead, `tests_pra.var_test`
-importing it would close that cycle. Keep new shared PRA-calibration data
-here, not inside `alm.scr`, for the same reason.
+This is a standalone module with no dependency on `alm.scr`, on purpose:
+both `alm.scr` (the SCR sub-modules) and `alm.tests_pra` (PRA Test 2's VaR
+shocks) need this same calibration, and `alm.scr.standard_formula` already
+depends on `alm.stresses.runner`, which depends on
+`alm.tests_pra.accumulated_cf_shortfall`. Putting this data inside
+`alm.scr` would close that into an import cycle. New shared calibration
+data should live here for the same reason.
 """
 
 from __future__ import annotations

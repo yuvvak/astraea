@@ -1,35 +1,18 @@
-"""Basic Own Funds and SCR coverage ratio.
+"""Basic Own Funds and SCR coverage ratio: the headline solvency metric
+insurers actually publish (Rothesay Life discloses 249% for FY2025).
 
-The headline solvency metric real insurers publish -- Rothesay Life Plc
-discloses an SCR coverage ratio of 249% for FY2025 (see the "Rothesay
-Benchmark" artifact and Annual Report and Accounts 2025, Note F.1) -- is
-Own Funds eligible to meet the SCR, divided by the SCR itself. This
-engine already computes the SCR (`alm/scr/standard_formula.py`) and the
-Risk Margin (`alm/rm/risk_margin.py`), but had never turned those into a
-coverage ratio because it never computed Own Funds. This module closes
-that gap.
+Basic Own Funds is assets minus Technical Provisions (BEL with MA, plus
+Risk Margin). This deliberately stops short of Solvency II's full capital
+tiering (Tier 1/2/3, restricted vs unrestricted, eligibility caps) since
+this engine has never modelled a firm's actual capital structure, so what
+it reports is "basic" own funds, not "eligible" own funds. A real firm's
+eligible figure is usually a bit lower once restricted capital drops out
+(Rothesay: £9,272m available vs £9,116m eligible for FY2025).
 
-`compute_own_funds` uses real Solvency II methodology: Basic Own Funds is
-the excess of assets over liabilities, where "liabilities" here means
-Technical Provisions -- BEL discounted with the Matching Adjustment, plus
-the Risk Margin. It deliberately stops at "Basic" Own Funds and does not
-attempt Solvency II's capital-tiering system (Tier 1/2/3, restricted vs
-unrestricted, eligibility caps against the SCR/MCR), because this engine
-has never modeled a firm's actual capital structure (share capital,
-subordinated loan notes, Restricted Tier 1 debt) -- only the asset and
-liability side of an MA portfolio. A real firm's ELIGIBLE Own Funds (what
-actually counts toward its coverage ratio) can differ from Basic Own
-Funds once ineligible or restricted capital is excluded: Rothesay's own
-FY2025 disclosure shows Own Funds available of £9,272m against Own Funds
-eligible of £9,116m (Note F.1). This module reports the former, clearly
-labelled `basic_own_funds`, not the latter.
-
-Distinct from, and not to be confused with, `StressLegResult.own_funds`
-in `alm/stresses/runner.py`: that is a lighter-weight "asset market value
-minus BEL with MA" figure (Risk Margin not subtracted), used there only
-to gauge how sensitive an MA portfolio's own funds are to a stress
-scenario -- not to produce a genuine SCR coverage ratio, which needs the
-Risk Margin included in Technical Provisions to be Solvency-II-faithful.
+Not the same thing as `StressLegResult.own_funds` in
+`alm/stresses/runner.py`, which is a lighter asset-minus-BEL figure with
+no Risk Margin, used there just to gauge stress sensitivity rather than
+produce a real coverage ratio.
 """
 
 from __future__ import annotations

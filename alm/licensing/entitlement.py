@@ -1,24 +1,21 @@
-"""Self-hosted license entitlement: since the product ships as software the
-customer runs inside their own infrastructure (not a hosted service this
-project bills directly), there is no server-side account to gate access --
-entitlement has to be checked locally, from a license file the customer
-installs alongside the software.
+"""Self-hosted license entitlement. Since the product runs inside the
+customer's own infrastructure rather than as a hosted service, there's no
+server-side account to gate access against, so entitlement gets checked
+locally against a license file the customer installs alongside the
+software.
 
-Signed with **Ed25519** (asymmetric): `issue_license` signs with a private
-key that is generated once and never ships to a customer; `verify_license`
-checks the signature with the matching public key, which IS bundled in the
-distributed package. This is the real production scheme, superseding the v1
-HMAC-shared-secret placeholder this module used to carry (that scheme's own
-docstring flagged it as forgeable in principle, since a shared secret
-embedded in every customer's installed package is extractable; asymmetric
-signing removes that weakness structurally, because the verifying party
-never holds anything that lets it also sign).
+Signed with Ed25519 (asymmetric). `issue_license` signs with a private key
+generated once and never shipped to a customer; `verify_license` checks
+the signature against the matching public key, which is bundled in the
+distributed package. This replaces an earlier HMAC-shared-secret version,
+which was forgeable in principle since the shared secret would have had
+to live inside every customer's installed copy. With asymmetric signing
+the verifying side never holds anything it could also sign with.
 
-Deployment split, not a code split: `generate_keypair` and `issue_license`
-are vendor-side operations (run once to create the keypair, then per sale to
-issue a license), never distributed to a customer. `verify_license`, the
-`PUBLIC_KEY_PEM` it's called with, and everything else in this module is
-what ships inside the customer's installed package.
+`generate_keypair` and `issue_license` are vendor-side only, run once to
+create the keypair and then once per sale to issue a license.
+`verify_license`, `PUBLIC_KEY_PEM`, and everything else here is what
+actually ships inside the customer's package.
 """
 
 from __future__ import annotations

@@ -1,5 +1,4 @@
-"""Standard Formula SCR for the MA portfolio (deliverable 8: "SF SCR
-skeleton for the MA portfolio including spread + longevity + MA-in-stress").
+"""Standard Formula SCR for the MA portfolio.
 
 Sub-modules: spread, currency, interest rate and concentration (market
 risk), longevity (life underwriting risk), counterparty default, and
@@ -9,53 +8,33 @@ operational risk, aggregated as:
     BSCR    = corr({market, life, counterparty})
     SCR     = max(0, BSCR + operational - LAC_DT)
 
-using the generic correlation aggregator in `scr/correlation.py`, treated as
-a notional standalone calculation for the MA portfolio (SF Part 9: "no
-diversification between MAP, other RFFs and the remaining part" -- there is
-only one portfolio in this v1, so that constraint is trivially satisfied;
-the aggregation boundary is fixed here so a second MAP/RFF can be added
-later without diversifying across the boundary by accident).
+using the generic correlation aggregator in `scr/correlation.py`. Treated
+as a standalone calculation for the one MA portfolio modelled here (the
+SF Part 9 "no diversification between MAP, other RFFs and the remaining
+part" boundary is trivially satisfied with a single portfolio, but it's
+kept explicit so a second MAP/RFF can be added later without silently
+diversifying across that boundary).
 
-Every stress recomputes MA in full (via `stresses.run_stress`, or -- for
-longevity specifically -- the fixed-MA-rate mechanism in
-`compute_longevity_scr` below) rather than freezing the base MA and only
-shocking BEL (project brief: "Recalculate MA inside each SF scenario (do
-not freeze base MA)").
+Every stress recomputes MA in full rather than freezing the base MA and
+just shocking BEL, except for longevity, which needs the fixed-MA-rate
+mechanism in `compute_longevity_scr` below (see that function's docstring
+for why).
 
-`compute_full_standard_formula_scr` expands any `FundHolding` position into
-its constituents before every sub-module below runs (`look_through.py`),
-so a fund's underlying spread/currency/concentration/counterparty exposure
-is priced at the constituent level, not hidden behind one opaque fund MV.
+`compute_full_standard_formula_scr` expands any `FundHolding` into its
+constituents first (`look_through.py`), so a fund's underlying exposure is
+priced at the constituent level rather than behind one opaque MV.
 
-The counterparty default sub-module prices cash/deposit exposure,
-in-the-money derivative (swap) exposure, and net (collateral-adjusted)
-reinsurance recoverable exposure -- an out-of-the-money swap, or a fully
-collateralized reinsurance position, correctly contributes nothing.
-
-Spread risk (3D17), currency risk (3D32), interest rate risk (3D4-3D6),
-concentration risk (3D26-3D31), operational risk (Article 204) and every
-correlation parameter used (market sub-module and top-level BSCR) are now
-the REAL PRA Rulebook / Solvency II Delegated Regulation Annex IV figures
--- verified against prarulebook.co.uk and cross-checked against
-independent sources; see each constant's own comment (in this module or
-`alm/pra_calibration.py`) for the rule citation. Counterparty default
-remains an ILLUSTRATIVE PLACEHOLDER: the real Article 199 Type 1/Type 2
-formula (loss-given-default, probability of default by rating, and a
-piecewise variance-of-losses aggregation across counterparties) is
-substantially more involved than a table lookup, and was deliberately left
-unimplemented this session rather than risk a subtly wrong regulatory
-capital formula -- see `compute_counterparty_default_scr`'s docstring.
-A later research pass (2026-09-10) confirmed the Article 199 PD-by-CQS
-table (CQS0 0.002% up to CQS5/6 4.2%) and the Type 1 LGD formulas for
-reinsurance/derivative/mortgage exposures against primary legislative
-text, but could NOT confirm the Type 1 cross-counterparty variance
-aggregation formula or the Type 2 flat-factor article against primary
-text -- only against secondary sources reproducing it without citing the
-underlying article. That gap is exactly the "piecewise variance-of-losses
-aggregation" this docstring already flagged as the hard part; implementing
-against unconfirmed pieces would trade an honest placeholder for a formula
-that looks real but isn't fully verified, so this sub-module is still
-deliberately left as-is.
+Spread (3D17), currency (3D32), interest rate (3D4-3D6), concentration
+(3D26-3D31), operational risk (Article 204) and both correlation matrices
+are calibrated to the real PRA Rulebook / Solvency II Annex IV figures;
+see each constant's comment (here or in `alm/pra_calibration.py`) for the
+citation. Counterparty default is the one sub-module still an illustrative
+placeholder: the real Article 199 Type 1/Type 2 formula (loss-given-
+default, PD by rating, and a variance-of-losses aggregation across
+counterparties) is involved enough that I'd rather leave it honestly
+unfinished than ship a capital number I can't fully stand behind. See
+`compute_counterparty_default_scr`'s docstring for exactly what's
+confirmed against primary legislative text and what isn't.
 """
 
 from __future__ import annotations
